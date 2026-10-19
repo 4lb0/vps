@@ -13,7 +13,7 @@ Cómo se relacionan las piezas de Nube. Para el detalle de instalación, ver
 | `hooks/post-receive` | Dispara la aplicación de la configuración del servidor |
 | `nube-apply-config` | Checkout de la config e instalación (`install.sh`) |
 | `hooks/post-update` | Dispara el deploy de una app |
-| `nube-hook-post-update` | Hace el checkout, `.env`, Composer y Laravel |
+| `nube-hook-post-update` | Hace el checkout, `.env`, dependencias y Laravel |
 | `nginx` | TLS, virtual hosts, archivos estáticos y proxy a PHP-FPM |
 | `PHP-FPM` | Ejecuta PHP (por defecto como `www-data`) |
 | `MySQL/MariaDB` | Base por app, usuario de MySQL único |
@@ -69,9 +69,11 @@ Detalles:
 6. git --work-tree=/var/www/<dominio> checkout -f <ref>
 7. plantilla .env + placeholders #NUBE_*#
 8. composer install (si hay composer.json)
-9. Laravel: APP_KEY, permisos, caches, migraciones
-10. .nube/deploy (si existe)
-11. salida en la terminal del que hizo push + ~/nube-deploy.log
+9. npm ci + build (si hay package.json) y PM2 (si hay ecosystem.config.js)
+10. .venv + pip install (si hay requirements.txt o pyproject.toml)
+11. Laravel: APP_KEY, permisos, caches, migraciones
+12. .nube/deploy (si existe)
+13. salida en la terminal del que hizo push + ~/nube-deploy.log
 ```
 
 Puntos de falla y su efecto:
@@ -83,6 +85,7 @@ Puntos de falla y su efecto:
 | 6 | Los archivos quedan en el estado anterior |
 | 8 | Falla el deploy; el código nuevo ya está en disco |
 | 9 | Igual que 8; revisar el log |
+| 10 | Igual que 8; revisar el log |
 
 Nube **no** hace deploy atómico: el sitio puede ver un estado intermedio
 durante el checkout. Para producción crítica, ver la sección de zero downtime
@@ -153,5 +156,6 @@ Nube está pensado para **un servidor**. Cuando no alcanza:
 - **GPG sin passphrase**: permite deploy no interactivo; protege contra
   lectura casual, no contra root.
 - **Sin panel web**: menos superficie y menos piezas; todo es scripteable.
-- **Laravel como caso principal**: el hook detecta `artisan` y hace los pasos
-  habituales; el resto se personaliza con `.nube/deploy`.
+- **Laravel, Node y Python como casos principales**: el hook detecta `artisan`,
+  `package.json`, `ecosystem.config.js` y `requirements.txt`/`pyproject.toml`,
+  y hace los pasos habituales; el resto se personaliza con `.nube/deploy`.

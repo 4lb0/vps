@@ -66,7 +66,8 @@ incluyendo la propagación del DNS.
 - [`../nginx/`](../nginx/): configuración de nginx que Nube instala (TLS, rate
   limit y headers de seguridad).
 - [`ejemplos/systemd/`](ejemplos/systemd/): servicio para una app Node con PM2.
-- [`ejemplos/deploy/`](ejemplos/deploy/): hooks propios para Laravel y Node.
+- [`ejemplos/deploy/`](ejemplos/deploy/): hooks propios para Laravel, Node y
+  Python.
 - [`ejemplos/backup/`](ejemplos/backup/): backup de bases y archivos a un
   destino remoto.
 

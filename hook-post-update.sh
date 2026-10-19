@@ -9,11 +9,15 @@
 #   1. checkout del ref pusheado en /var/www/<dominio>
 #   2. plantilla de .env (reemplaza #NUBE_*#)
 #   3. composer install si hay composer.json
-#   4. pasos especificos de Laravel
-#   5. .nube/deploy opcional
+#   4. npm ci + build si hay package.json; recarga de PM2 si hay ecosystem
+#   5. .venv + pip install si hay requirements.txt o pyproject.toml
+#   6. pasos especificos de Laravel
+#   7. .nube/deploy opcional
 #
 # Variables utiles para personalizar:
 #   NUBE_SKIP_COMPOSER=1
+#   NUBE_SKIP_NPM=1
+#   NUBE_SKIP_PYTHON=1
 #   NUBE_SKIP_MIGRATIONS=1
 #   NUBE_SKIP_ARTISAN_CACHE=1
 
@@ -112,6 +116,77 @@ if [ -f composer.json ] && [ "${NUBE_SKIP_COMPOSER:-0}" != "1" ]; then
     echo -e -n "Instalando dependencias de composer..."
     composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --quiet
     echo -e "$NUBE_OK"
+fi
+
+# --- Node --------------------------------------------------------------------
+
+node_dependencies() {
+    command -v npm >/dev/null 2>&1 \
+        || nube_die "hay package.json pero npm no esta instalado en el servidor"
+
+    echo -e -n "Instalando dependencias de npm..."
+    if [ -f package-lock.json ]; then
+        npm ci --no-audit --no-fund --loglevel=error
+    else
+        npm install --no-audit --no-fund --loglevel=error
+    fi
+    echo -e "$NUBE_OK"
+
+    if node -e 'process.exit(require("./package.json").scripts?.build ? 0 : 1)' 2>/dev/null; then
+        echo -e -n "Compilando con npm..."
+        npm run build --silent
+        echo -e "$NUBE_OK"
+    fi
+}
+
+node_reload() {
+    [ -f ecosystem.config.js ] || return 0
+
+    if ! command -v pm2 >/dev/null 2>&1; then
+        nube_warn "hay ecosystem.config.js pero pm2 no esta instalado; el proceso no se reinicia solo"
+        return 0
+    fi
+
+    echo -e -n "Recargando procesos con PM2..."
+    pm2 startOrReload ecosystem.config.js --update-env >/dev/null
+    pm2 save >/dev/null
+    echo -e "$NUBE_OK"
+}
+
+if [ -f package.json ]; then
+    echo -e "Stack encontrado: \e[1mNode\e[0m"
+    [ "${NUBE_SKIP_NPM:-0}" = "1" ] || node_dependencies
+    node_reload
+fi
+
+# --- Python ------------------------------------------------------------------
+
+python_dependencies() {
+    command -v python3 >/dev/null 2>&1 \
+        || nube_die "hay requirements.txt o pyproject.toml pero python3 no esta instalado"
+
+    local python="$NUBE_APP_ROOT/.venv/bin/python"
+    local pip="$NUBE_APP_ROOT/.venv/bin/pip"
+
+    if [ ! -x "$python" ]; then
+        echo -e -n "Creando entorno virtual..."
+        python3 -m venv .venv || nube_die "no se pudo crear .venv (instala python3-venv)"
+        echo -e "$NUBE_OK"
+    fi
+
+    echo -e -n "Instalando dependencias de Python..."
+    "$pip" install --quiet --upgrade pip
+    if [ -f requirements.txt ]; then
+        "$pip" install --quiet -r requirements.txt
+    else
+        "$pip" install --quiet .
+    fi
+    echo -e "$NUBE_OK"
+}
+
+if [ -f requirements.txt ] || [ -f pyproject.toml ]; then
+    echo -e "Stack encontrado: \e[1mPython\e[0m"
+    [ "${NUBE_SKIP_PYTHON:-0}" = "1" ] || python_dependencies
 fi
 
 # --- Laravel -----------------------------------------------------------------

@@ -56,8 +56,10 @@ hooks/post-update  →  nube-hook-post-update refs/heads/main blog.example.com ~
       ├─ 1. checkout en /var/www/blog.example.com
       ├─ 2. prepara .env (plantilla + #NUBE_*#)
       ├─ 3. composer install (si hay composer.json)
-      ├─ 4. Laravel: APP_KEY, permisos, caches, migraciones
-      └─ 5. .nube/deploy (si existe y es ejecutable)
+      ├─ 4. npm ci + build (si hay package.json)
+      ├─ 5. .venv + pip install (si hay requirements.txt o pyproject.toml)
+      ├─ 6. Laravel: APP_KEY, permisos, caches, migraciones
+      └─ 7. .nube/deploy (si existe y es ejecutable)
       │
       ▼
 https://blog.example.com
@@ -138,12 +140,18 @@ Si el repo tiene `artisan`, el hook ejecuta:
 | Cache | `php artisan config:cache`, `route:cache`, `view:cache` |
 | Migraciones | `php artisan migrate --force` |
 
+Si el repo tiene `package.json` (por ejemplo Vite para el frontend), el hook
+también corre `npm ci` y `npm run build` antes de este paso. Se saltea con
+`NUBE_SKIP_NPM=1`.
+
 Comandos útiles para saltarte pasos en un deploy puntual:
 
 ```bash
 NUBE_SKIP_ARTISAN_CACHE=1 git push prod main
 NUBE_SKIP_MIGRATIONS=1 git push prod main
 NUBE_SKIP_COMPOSER=1 git push prod main
+NUBE_SKIP_NPM=1 git push prod main
+NUBE_SKIP_PYTHON=1 git push prod main
 ```
 
 No funcionan como variables de entorno del `git push` (se ejecutan en el
@@ -174,6 +182,18 @@ commiteá el resultado en `public/` o compilalo en un hook propio.
 
 ## 6. Node, Python y otros lenguajes
 
+El hook detecta el stack por los archivos del repositorio y resuelve las
+dependencias sin que configures nada:
+
+| Archivo | Qué hace el hook |
+| --- | --- |
+| `package.json` | `npm ci` (o `npm install` si no hay lockfile) y `npm run build` si existe el script |
+| `ecosystem.config.js` | `pm2 startOrReload` + `pm2 save` si PM2 está instalado |
+| `requirements.txt` / `pyproject.toml` | crea `.venv` y ejecuta `pip install` |
+
+Se pueden saltear con `NUBE_SKIP_NPM=1` y `NUBE_SKIP_PYTHON=1`. El resto
+—proceso vivo y proxy— se configura una vez.
+
 Nginx solo sirve archivos y PHP. Un proceso Node/Python/Go necesita un
 servicio que lo mantenga vivo, y nginx actuando como proxy inverso.
 
@@ -186,7 +206,8 @@ sudo runuser -u nube -- pm2 startup systemd -u nube --hp /home/nube
 # pm2 imprime un comando sudo; ejecutalo
 ```
 
-Tu repo incluye `ecosystem.config.js` y `.nube/deploy`:
+Tu repo incluye `ecosystem.config.js`; con eso el hook ya instala
+dependencias, compila y recarga el proceso:
 
 ```js
 // ecosystem.config.js
@@ -200,15 +221,15 @@ module.exports = {
 };
 ```
 
+Si necesitás pasos extra, agregá `.nube/deploy` (el hook ya hizo `npm ci`, el
+build y la recarga de PM2, así que no los repitas):
+
 ```bash
 #!/bin/bash
 # .nube/deploy
 set -euo pipefail
 cd "$NUBE_PATH"
-npm ci --omit=dev
-npm run build --if-present
-pm2 startOrReload ecosystem.config.js
-pm2 save
+# migraciones, tareas, cache, etc.
 ```
 
 Y en nginx: la configuración del servidor se versiona en `nginx/`. Para una
@@ -241,8 +262,12 @@ Después: `git push server main` (Nube valida con `nginx -t` y recarga).
 
 Hay un ejemplo completo en
 [`docs/ejemplos/systemd/`](ejemplos/systemd/) y
-[`docs/ejemplos/deploy/`](ejemplos/deploy/). Para Python/Go, el mismo patrón:
-`gunicorn`/binario en systemd + proxy en nginx.
+[`docs/ejemplos/deploy/`](ejemplos/deploy/). Para **Python**, el hook ya deja
+las dependencias en `.venv`; solo falta el proceso: `gunicorn` en systemd (ver
+[Plantillas](referencia/plantillas.md#python-gunicorn-con-systemd)) más el
+proxy en nginx, y el reinicio en `.nube/deploy`
+([`python-deploy.sh`](ejemplos/deploy/python-deploy.sh)). Para Go, el mismo
+patrón: binario en systemd + proxy en nginx.
 
 ## 7. Hook propio de la app
 

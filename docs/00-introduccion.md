@@ -102,8 +102,9 @@ deploy.
 | --- | --- | --- |
 | HTML/CSS/JS estático | Solo nginx | Poné los archivos en `public/` |
 | PHP (Laravel, WordPress, propio) | nginx + PHP-FPM | Soportado out of the box |
-| Node.js | nginx + proceso Node (systemd/PM2) | Receta incluida |
-| Python, Go, Ruby | nginx + proceso propio | Receta manual |
+| Node.js | nginx + proceso Node (systemd/PM2) | Dependencias y build automáticos; receta para el proceso |
+| Python | nginx + Gunicorn (systemd) | Dependencias automáticas; receta para el proceso |
+| Go, Ruby | nginx + proceso propio | Receta manual |
 | Docker | Docker + nginx como proxy | Receta manual |
 
 No todos los proyectos necesitan lo mismo. Un sitio estático no requiere
@@ -156,6 +157,7 @@ Nube automatiza la parte repetitiva:
 - separar base de datos y credenciales por app;
 - generar `.env` a partir de una plantilla;
 - correr Composer, migraciones y caches de Laravel;
+- instalar dependencias de Node y Python;
 - emitir certificados y servir varios dominios con nginx.
 
 Lo que **no** hace: no es un panel multi-tenant, no reemplaza un proveedor de

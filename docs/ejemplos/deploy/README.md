@@ -19,6 +19,8 @@ Variables disponibles:
 
 - [`laravel-deploy.sh`](laravel-deploy.sh): `storage:link` y `queue:restart`.
 - [`node-deploy.sh`](node-deploy.sh): `npm ci`, build y PM2.
+- [`python-deploy.sh`](python-deploy.sh): reinicio del servicio de Gunicorn
+  (el hook ya instala las dependencias en `.venv`).
 
 ## Uso
 

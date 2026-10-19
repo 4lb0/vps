@@ -214,7 +214,9 @@ composer -V
 El hook de deploy ejecuta `composer` en cada push, así que tiene que estar en
 el PATH del usuario de deploy (instalado en `/usr/local/bin`).
 
-## 10. Node.js (opcional)
+## 10. Node.js y Python (opcional)
+
+### Node.js
 
 Solo si vas a correr apps Node, bundlers (`vite`, `npm run build`) o el
 frontend de Laravel.
@@ -225,6 +227,24 @@ sudo -E bash /tmp/nodesource_setup.sh
 sudo apt install -y nodejs
 node -v
 npm -v
+```
+
+Si usás PM2 para mantener vivo el proceso:
+
+```bash
+sudo npm install -g pm2
+sudo runuser -u nube -- pm2 startup systemd -u nube --hp /home/nube
+# pm2 imprime un comando sudo: ejecutalo
+```
+
+### Python
+
+Solo si vas a correr apps Python. El hook crea el entorno virtual, así que
+hace falta `venv`:
+
+```bash
+sudo apt install -y python3 python3-venv python3-pip
+python3 -V
 ```
 
 ## 11. acme.sh para certificados
@@ -292,6 +312,7 @@ php -v | head -1
 composer -V
 mysql --version
 node -v || true
+python3 -V || true
 acme.sh --version || sudo /root/.acme.sh/acme.sh --version | head -2
 
 echo "--- servicios ---"
@@ -311,6 +332,7 @@ sudo ss -tlnp | grep -E ':(80|443|3306)'
 - [ ] PHP 8.3-FPM activo y con socket.
 - [ ] MySQL/MariaDB activo y escuchando solo en `127.0.0.1`.
 - [ ] Composer disponible globalmente.
+- [ ] Node.js y/o Python instalados si vas a usarlos.
 - [ ] acme.sh instalado.
 - [ ] `/var/www` con setgid y grupo `www-data`.
 - [ ] UFW permitiendo 22, 80 y 443.

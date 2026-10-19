@@ -55,6 +55,27 @@ src/
 composer.json        # opcional
 ```
 
+### Node.js
+
+```text
+package.json
+package-lock.json
+ecosystem.config.js  # para PM2
+server.js
+public/              # lo que sirve nginx, si hay
+```
+
+`node_modules/` no se versiona: el hook corre `npm ci`.
+
+### Python
+
+```text
+requirements.txt     # o pyproject.toml
+app.py
+templates/ static/
+.venv/               # no se versiona: lo crea el hook
+```
+
 ## Hook propio `.nube/deploy`
 
 ```bash
@@ -91,8 +112,9 @@ rsync -a --delete dist/ public/
 
 ### Node con PM2
 
-Ver [`../ejemplos/deploy/node-deploy.sh`](../ejemplos/deploy/node-deploy.sh) y
-[`../ejemplos/systemd/`](../ejemplos/systemd/).
+El hook instala dependencias, corre el build y recarga PM2 si hay
+`ecosystem.config.js`. Ver [`../ejemplos/systemd/`](../ejemplos/systemd/) para
+el proceso.
 
 ### Laravel con workers
 
@@ -128,10 +150,11 @@ WantedBy=multi-user.target
 # .nube/deploy
 set -euo pipefail
 cd "$NUBE_PATH"
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
 sudo systemctl restart blog    # requiere una regla en sudoers
 ```
+
+El hook ya crea `.venv` e instala `requirements.txt` o `pyproject.toml`, así
+que el script solo reinicia el servicio.
 
 ## Plantilla de nginx para un dominio propio
 

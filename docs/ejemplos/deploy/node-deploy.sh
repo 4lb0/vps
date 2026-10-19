@@ -10,7 +10,9 @@
 set -euo pipefail
 
 echo "Instalando dependencias de Node..."
-npm ci --omit=dev --no-audit --no-fund
+# El hook ya hace npm ci, el build y la recarga de PM2. Este script solo es
+# necesario si querés controlar esos pasos a mano.
+npm ci --no-audit --no-fund
 
 echo "Compilando (si hay script build)..."
 npm run build --if-present

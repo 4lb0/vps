@@ -82,6 +82,8 @@ Variables que acepta del entorno del servidor:
 | Variable | Efecto |
 | --- | --- |
 | `NUBE_SKIP_COMPOSER=1` | No corre `composer install` |
+| `NUBE_SKIP_NPM=1` | No corre `npm ci`/`npm install` ni el build |
+| `NUBE_SKIP_PYTHON=1` | No crea `.venv` ni corre `pip install` |
 | `NUBE_SKIP_MIGRATIONS=1` | No corre `php artisan migrate` |
 | `NUBE_SKIP_ARTISAN_CACHE=1` | No corre `config:cache`, `route:cache`, `view:cache` |
 

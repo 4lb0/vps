@@ -91,6 +91,8 @@ El servidor tiene:
 | Dominios y subdominios | `nd`, `ns` y `nr` |
 | HTTPS | `acme.sh` (HTTP-01 o DNS-01 para wildcard) |
 | PHP / Laravel | `composer install`, `.env`, caches, migraciones |
+| Node.js | `npm ci`, `npm run build` y recarga de PM2 si hay `ecosystem.config.js` |
+| Python | `.venv` + `pip install` desde `requirements.txt` o `pyproject.toml` |
 | Sitios estáticos | Cualquier `index.html` dentro de `public/` |
 | Base de datos | Un usuario y una base por app (MySQL/MariaDB) |
 | Seguridad | fail2ban, UFW, hardening de SSH/nginx, guía de buenas prácticas |
@@ -170,11 +172,11 @@ Referencia completa: [Comandos y variables](docs/referencia/comandos.md).
 | Guía | Para qué |
 | --- | --- |
 | [00 · Introducción](docs/00-introduccion.md) | Servidor, VPS, hosting, dominio y DNS desde cero |
-| [01 · Preparar Ubuntu](docs/01-preparar-ubuntu.md) | Crear el VPS e instalar nginx, PHP, MySQL, Node y acme.sh |
+| [01 · Preparar Ubuntu](docs/01-preparar-ubuntu.md) | Crear el VPS e instalar nginx, PHP, MySQL, Node, Python y acme.sh |
 | [02 · Dominio y DNS](docs/02-dominio-y-dns.md) | Registrar el dominio, apuntarlo y configurar wildcard |
 | [03 · Instalar Nube](docs/03-instalar-nube.md) | `bootstrap.sh`, `install.sh`, `/etc/nube/nube.conf` y nginx |
 | [04 · El usuario y las apps](docs/04-usuario-y-apps.md) | El usuario de deploy, dominios, repositorios y bases |
-| [05 · Deploy con git](docs/05-deploy-con-git.md) | Cómo funciona el push, `.env`, Laravel, Node y rollback |
+| [05 · Deploy con git](docs/05-deploy-con-git.md) | Cómo funciona el push, `.env`, Laravel, Node, Python y rollback |
 | [06 · Seguridad](docs/06-seguridad.md) | SSH, fail2ban, UFW, nginx, PHP-FPM, MySQL y secretos |
 | [07 · Operación y backups](docs/07-operacion-y-backups.md) | Logs, actualizaciones, backups y restauración |
 | [08 · Solución de problemas](docs/08-solucion-de-problemas.md) | Errores comunes y cómo diagnosticarlos |
@@ -204,8 +206,10 @@ Para reportar una vulnerabilidad, leé [`SECURITY.md`](SECURITY.md).
 Nube es deliberadamente chico y transparente:
 
 - **PHP y Laravel** funcionan out of the box.
+- **Node y Python** instalan sus dependencias en el deploy (`npm`/`pip`);
+  el proceso vivo y el proxy en nginx se configuran una vez con las recetas.
 - **Sitios estáticos** funcionan poniendo los archivos en `public/`.
-- **Node, Python, Go o Docker** se pueden correr con systemd, PM2 o Docker;
+- **Go o Docker** se pueden correr con systemd o Docker;
   hay recetas en [Deploy con git](docs/05-deploy-con-git.md).
 - Es **un VPS, un usuario de deploy y un dominio base**. No es un hosting
   multi-tenant: si necesitás alojar clientes que no confían entre sí, usá un

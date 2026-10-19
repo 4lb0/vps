@@ -75,6 +75,9 @@ Cada mensaje de error indica el problema. Los más comunes:
 | `no existe el directorio web /var/www/...` | El symlink no existe: corré `nd`/`ns` o `nr` |
 | `no se pudo crear /var/www/...` | `/var/www` sin permiso de grupo: ver [01](01-preparar-ubuntu.md#12-directorios-y-permisos) |
 | `composer: command not found` | Composer no instalado globalmente |
+| `hay package.json pero npm no esta instalado` | Falta Node.js en el servidor (ver [01](01-preparar-ubuntu.md#10-nodejs-y-python-opcional)) |
+| `hay requirements.txt o pyproject.toml pero python3 no esta instalado` | Falta Python 3 en el servidor |
+| `no se pudo crear .venv` | Falta `python3-venv`: `sudo apt install python3-venv` |
 | `no se pudo descifrar .../secrets.gpg` | Clave GPG o `secrets.gpg` de otro usuario |
 | `Laravel necesita un .env` | Falta `.env.example` en el repo |
 | `faltan credenciales de DB` | `secrets.gpg` vacío o corrupto |
