@@ -1,13 +1,18 @@
 #!/bin/bash
 #
-# git-shll no-interactive-login 
-echo -e "Hola \e[1m$USER\e[0m, has iniciado sesión correctamente."
-echo -e "El siguiente paso es configurar el deploy."
-echo -e "Para eso ejecuta los siguientes comandos dentro de la carpeta de tu app:"
+# Mensaje que ve un usuario cuando entra por SSH sin ejecutar un comando git.
+# git-shell ejecuta este script desde ~/git-shell-commands/no-interactive-login.
+
+[ -r /etc/nube/nube.conf ] && . /etc/nube/nube.conf
+
+DOMAIN="${NUBE_BASE_DOMAIN:-nube.pragmore.com}"
+
+echo -e "Hola \e[1m$USER\e[0m, te conectaste correctamente."
 echo ""
-echo -e "  git init"
-echo -e "  git remote add prod $USER@nube.pragmore.com:git/\e[33;1mnombre-de-tu-app\e[0m"
+echo "Este servidor no ofrece shell interactivo: solo acepta git push/pull."
+echo "Para configurar el deploy, ejecuta en tu maquina:"
 echo ""
-echo -e "Lamentable no cuentas con acceso SSH, por lo que vamos a cerrar la sesión."
+echo -e "  git remote add prod $USER@$DOMAIN:git/\e[33;1mnombre-de-tu-app\e[0m"
+echo -e "  git push prod main"
 echo ""
-echo -e "Si necesitas ayuda puedes ir a \e[34;4mhttps://nube.pragmore.com/ayuda\e[0m"
+echo -e "Si necesitas ayuda: \e[34;4mhttps://$DOMAIN/ayuda\e[0m"

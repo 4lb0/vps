@@ -1,137 +1,198 @@
 #!/bin/bash
 #
-# Deploy app 
+# Hook de deploy. Lo invoca ~/git/<app>.git/hooks/post-update en cada push.
+#
+# Uso interno:
+#   nube-hook-post-update <ref> <dominio> <git-dir>
+#
+# Flujo:
+#   1. checkout del ref pusheado en /var/www/<dominio>
+#   2. plantilla de .env (reemplaza #NUBE_*#)
+#   3. composer install si hay composer.json
+#   4. pasos especificos de Laravel
+#   5. .nube/deploy opcional
+#
+# Variables utiles para personalizar:
+#   NUBE_SKIP_COMPOSER=1
+#   NUBE_SKIP_MIGRATIONS=1
+#   NUBE_SKIP_ARTISAN_CACHE=1
 
-readonly NUBE_REFS="$1"
-readonly NUBE_DOMAIN="$2"
-readonly NUBE_GIT_DIR="$3"
-readonly NUBE_SECRETS_FILE="$HOME/secrets.gpg"
+set -Eeuo pipefail
 
-readonly NUBE_PATH="/var/www/$NUBE_DOMAIN"
-readonly NUBE_SLUG=$(echo $NUBE_DOMAIN | sed 's/[-\.]/_/g')
-readonly NUBE_URL="https://$NUBE_DOMAIN"
+NUBE_REFS="${1:-}"
+NUBE_DOMAIN="${2:-}"
+NUBE_GIT_DIR="${3:-}"
 
-readonly NUBE_OK_MESSAGE="\e[32;1m ok\e[0m"
-readonly NUBE_ERROR_MESSAGE="\e[31;1m error\e[0m"
+[ -n "$NUBE_REFS" ] && [ -n "$NUBE_DOMAIN" ] && [ -n "$NUBE_GIT_DIR" ] || {
+    echo "uso: nube-hook-post-update <ref> <dominio> <git-dir>" >&2
+    exit 1
+}
 
-readonly NUBE_UPLOAD_MESSAGE="Haciendo el deploy a \e[34m$NUBE_DOMAIN\e[0m"
-readonly NUBE_COPY_CONFIG_MESSAGE="Copiar configuracion inicial..."
-readonly NUBE_RUNNING_COMPOSER_MESSAGE="Instalando composer..." 
-readonly NUBE_FRAMEWORK_MESSAGE="Framework encontrado:" 
-readonly NUBE_MIGRATIONS_MESSAGES="Corriendo migraciones..." 
-readonly NUBE_CACHE_CONFIG_MESSAGE="Cacheando configuracion..."
-readonly NUBE_CACHE_ROUTES_MESSAGE="Cacheando rutas..."
-readonly NUBE_CACHE_VIEWS_MESSAGE="Cacheando vistas..."
-readonly NUBE_GENERATE_KEYS_MESSAGE="Generando claves..."
-readonly NUBE_DONE_MESSAGE="Listo"
-readonly NUBE_PROCESS_ERROR_MESSAGE="$NUBE_ERROR_MESSAGE Ha ocurrido un error.
-Por favor reportar a nube@pragmore.com con el siguiente mensaje: "
+NUBE_SELF="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+    NUBE_SELF="$(readlink -f "$NUBE_SELF" 2>/dev/null || printf '%s' "$NUBE_SELF")"
+fi
+NUBE_DIR="$(cd -- "$(dirname -- "$NUBE_SELF")" && pwd)"
+# shellcheck source=/dev/null
+. "$NUBE_DIR/lib.sh"
 
-readonly NUBE_DB_CONN="mysql"
-readonly NUBE_DB_HOST="127.0.0.1"
-readonly NUBE_DB_PORT="3306"
-readonly NUBE_DB_NAME=$NUBE_SLUG
+NUBE_PATH="$(nube_ensure_web_dir "$NUBE_DOMAIN")"
+NUBE_APP_ROOT="$HOME/www/$NUBE_DOMAIN"
+NUBE_SLUG="$(nube_slug "$NUBE_DOMAIN")"
+NUBE_URL="$(nube_url "$NUBE_DOMAIN")"
 
-# Export user secrets
-[ -f $NUBE_SECRETS_FILE ] && $(gpg  -q --decrypt $NUBE_SECRETS_FILE)
+# Descifra NUBE_DB_USER / NUBE_DB_PASS para el .env y Laravel.
+nube_load_secrets
+
+readonly NUBE_OK="\e[32;1m ok\e[0m"
+readonly NUBE_ERROR="\e[31;1m error\e[0m"
+readonly NUBE_UPLOAD="Haciendo el deploy a \e[34m$NUBE_DOMAIN\e[0m"
+readonly NUBE_PROCESS_ERROR="\e[31;1mError de deploy.\e[0m
+Revisa el log: $NUBE_DEPLOY_LOG
+Si el problema persiste, reportalo con el dominio, el commit y las ultimas lineas del log."
 
 welcome() {
-  echo -e "☁️  \e[35;1mNube\e[0m, by Pragmore - \e[34;4mhttps://nube.pragmore.com\e[0m 🚀"
-  echo -e "$NUBE_UPLOAD_MESSAGE"
+    echo -e "☁️  \e[35;1mNube\e[0m - $(nube_url "$NUBE_DOMAIN") 🚀"
+    echo -e "$NUBE_UPLOAD"
+    echo -e "ref: $NUBE_REFS"
 }
 
-finish() {
-  echo -e "\e[1;32m$NUBE_DONE_MESSAGE\e[0m → 🔗 \e[34;4m$NUBE_URL\e[0m"
-  echo -e "Si necesitas ayuda puedes ir a \e[34;4mhttps://nube.pragmore.com/ayuda\e[0m"
+error_report() {
+    local code=$?
+    echo -e "$NUBE_PROCESS_ERROR" >&2
+    exit "$code"
 }
+trap error_report ERR
 
-cd_web_path() {
-  [ ! -d $NUBE_PATH ] \
-    && echo -e "$NUBE_PROCESS_ERROR_MESSAGE No se encuentra $NUBE_PATH" \
-    && exit
-  cd $NUBE_PATH
-}
-
-deploy_files() {
-  git --work-tree=$NUBE_PATH --git-dir=$NUBE_GIT_DIR checkout -f -q $NUBE_REFS
-}
-
-dotenv() {
-  [ ! -f .env ] && [ -f .env.example ] && echo -e -n $NUBE_COPY_CONFIG_MESSAGE \
-    && (cp .env.example .env && echo -e $NUBE_OK_MESSAGE || echo -e $NUBE_ERROR_MESSAGE)
-  [ -f .env ] && sed -i "s@#NUBE_ROOT#@$NUBE_PATH@g" .env
-  [ -f .env ] && sed -i "s@#NUBE_URL#@$NUBE_URL@g" .env
-  [ -f .env ] && sed -i "s/#NUBE_DB_CONN#/$NUBE_DB_CONN/g" .env
-  [ -f .env ] && sed -i "s/#NUBE_DB_HOST#/$NUBE_DB_HOST/g" .env
-  [ -f .env ] && sed -i "s/#NUBE_DB_PORT#/$NUBE_DB_PORT/g" .env
-  [ -f .env ] && sed -i "s/#NUBE_DB_NAME#/$NUBE_DB_NAME/g" .env
-  [ -f .env ] && sed -i "s/#NUBE_DB_USER#/$NUBE_DB_USER/g" .env
-  [ -f .env ] && sed -i "s/#NUBE_DB_PASS#/$NUBE_DB_PASS/g" .env
-}
-
-composer_install() {
-  [ -f composer.json ] && echo -e $NUBE_RUNNING_COMPOSER_MESSAGE \
-    && (composer install --optimize-autoloader --no-dev -n -q \
-        && echo -e $NUBE_OK_MESSAGE  || echo -e $NUBE_ERROR_MESSAGE)
-}
-
-framework_found() {
-  echo -e "$NUBE_FRAMEWORK_MESSAGE \e[1m$1\e[0m"
-}
-
-laravel_dotenv() {
-  sed -i "s#APP_URL=.*#APP_URL=$NUBE_URL#g" .env
-
-  sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=$NUBE_DB_CONN/g" .env
-  sed -i "s/DB_HOST=.*/DB_HOST=$NUBE_DB_HOST/g" .env
-  sed -i "s/DB_DATABASE=.*/DB_DATABASE=$NUBE_DB_NAME/g" .env
-  sed -i "s/DB_PORT=.*/DB_PORT=$NUBE_DB_PORT/g" .env
-  sed -i "s/DB_USERNAME=.*/DB_USERNAME=$NUBE_DB_USER/g" .env
-  sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$NUBE_DB_PASS/g" .env
-
-  [ ! $(grep --silent APP_KEY=base .env) ] && echo -e -n $NUBE_GENERATE_KEYS_MESSAGE \
-    && php artisan key:generate --force -q -n \
-    && echo -e $NUBE_OK_MESSAGE  || echo -e $NUBE_ERROR_MESSAGE
-}
-
-laravel_write_permissions() {
-  chmod -R a+w storage/
-}
-
-laravel_fix_max_key_bug() {
-  local provider_file="app/Providers/AppServiceProvider.php" 
-  grep --silent Schema::defaultStringLength $provider_file || sed -i '/boot()/{N;N;
-    a \ \ \ \ \ \ \ \ \\Illuminate\\Support\\Facades\\Schema::defaultStringLength(191); /* Max key error https://github.com/laravel/framework/issues/24711 */
-  }' $provider_file 
-}
-
-laravel_deploy() {
-  echo -e -n $NUBE_CACHE_CONFIG_MESSAGE && php artisan config:cache -q \
-    && echo -e $NUBE_OK_MESSAGE  || echo -e $NUBE_ERROR_MESSAGE
-  echo -e -n $NUBE_CACHE_ROUTES_MESSAGE && php artisan route:cache -q \
-    && echo -e $NUBE_OK_MESSAGE  || echo -e $NUBE_ERROR_MESSAGE
-  echo -e -n $NUBE_CACHE_VIEWS_MESSAGE && php artisan view:cache -q \
-    && echo -e $NUBE_OK_MESSAGE  || echo -e $NUBE_ERROR_MESSAGE
-}
-
-laravel_migrate() {
-  echo -e $NUBE_MIGRATIONS_MESSAGES && php artisan migrate --force
-}
-
-welcome
-cd_web_path
-deploy_files
-dotenv
-composer_install
-
-# Laravel
-if [ -f artisan ]; then
-  framework_found "Laravel"
-  laravel_dotenv
-  laravel_write_permissions
-  laravel_fix_max_key_bug
-  laravel_deploy
-  laravel_migrate
+if [ -n "$NUBE_DEPLOY_LOG" ]; then
+    touch "$NUBE_DEPLOY_LOG" 2>/dev/null || true
+    exec > >(tee -a "$NUBE_DEPLOY_LOG") 2>&1
 fi
 
-finish
+echo
+echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) deploy $NUBE_DOMAIN $NUBE_REFS ==="
+
+welcome
+
+# --- Checkout ----------------------------------------------------------------
+
+[ -d "$NUBE_GIT_DIR" ] || nube_die "no existe el repositorio $NUBE_GIT_DIR"
+[ -d "$NUBE_PATH" ] || nube_die "no existe el directorio web $NUBE_PATH"
+
+nube_info "actualizando archivos"
+git --work-tree="$NUBE_APP_ROOT" --git-dir="$NUBE_GIT_DIR" checkout -f -q "$NUBE_REFS"
+
+cd "$NUBE_APP_ROOT"
+
+# --- .env --------------------------------------------------------------------
+
+nube_info "preparando .env"
+if [ ! -f .env ] && [ -f .env.example ]; then
+    cp .env.example .env
+    echo -e "  plantilla copiada$NUBE_OK"
+fi
+
+if [ -f .env ]; then
+    sed -i "s@#NUBE_ROOT#@$NUBE_APP_ROOT@g" .env
+    sed -i "s@#NUBE_URL#@$NUBE_URL@g" .env
+    sed -i "s@#NUBE_DB_CONN#@mysql@g" .env
+    sed -i "s@#NUBE_DB_HOST#@$NUBE_MYSQL_HOST@g" .env
+    sed -i "s@#NUBE_DB_PORT#@$NUBE_MYSQL_PORT@g" .env
+    sed -i "s@#NUBE_DB_NAME#@$NUBE_SLUG@g" .env
+    if [ -n "${NUBE_DB_USER:-}" ]; then
+        sed -i "s@#NUBE_DB_USER#@$NUBE_DB_USER@g" .env
+        sed -i "s@#NUBE_DB_PASS#@$NUBE_DB_PASS@g" .env
+    fi
+fi
+
+# --- Composer ----------------------------------------------------------------
+
+if [ -f composer.json ] && [ "${NUBE_SKIP_COMPOSER:-0}" != "1" ]; then
+    command -v composer >/dev/null 2>&1 || nube_die "composer no esta instalado en el servidor"
+    echo -e -n "Instalando dependencias de composer..."
+    composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --quiet
+    echo -e "$NUBE_OK"
+fi
+
+# --- Laravel -----------------------------------------------------------------
+
+laravel_dotenv() {
+    [ -f .env ] || nube_die "Laravel necesita un .env (no hay .env ni .env.example)"
+
+    sed -i "s#^APP_URL=.*#APP_URL=$NUBE_URL#g" .env
+    sed -i "s/^DB_CONNECTION=.*/DB_CONNECTION=mysql/g" .env
+    sed -i "s/^DB_HOST=.*/DB_HOST=$NUBE_MYSQL_HOST/g" .env
+    sed -i "s/^DB_PORT=.*/DB_PORT=$NUBE_MYSQL_PORT/g" .env
+    sed -i "s/^DB_DATABASE=.*/DB_DATABASE=$NUBE_SLUG/g" .env
+    sed -i "s/^DB_USERNAME=.*/DB_USERNAME=$NUBE_DB_USER/g" .env
+    sed -i "s@^DB_PASSWORD=.*@DB_PASSWORD=$NUBE_DB_PASS@g" .env
+
+    if ! grep -q '^APP_KEY=base64:' .env; then
+        echo -e -n "Generando APP_KEY..."
+        php artisan key:generate --force --no-interaction --quiet
+        echo -e "$NUBE_OK"
+    fi
+}
+
+laravel_permissions() {
+    local dir
+    for dir in storage bootstrap/cache; do
+        [ -d "$dir" ] || continue
+        chgrp -R "$NUBE_WEB_GROUP" "$dir"
+        chmod -R g+rwX "$dir"
+    done
+}
+
+laravel_max_key_workaround() {
+    local provider="app/Providers/AppServiceProvider.php"
+    [ -f "$provider" ] || return 0
+    grep -q 'Schema::defaultStringLength' "$provider" && return 0
+
+    # Workaround historico para MySQL con indices de 191 caracteres.
+    sed -i '/boot()/{N;/}/a\        \Illuminate\Support\Facades\Schema::defaultStringLength(191);' "$provider" \
+        || nube_warn "no se pudo aplicar el workaround de Schema::defaultStringLength"
+}
+
+laravel_cache() {
+    [ "${NUBE_SKIP_ARTISAN_CACHE:-0}" = "1" ] && return 0
+
+    echo -e -n "Cacheando configuracion..."
+    php artisan config:cache --no-interaction --quiet && echo -e "$NUBE_OK" || echo -e "$NUBE_ERROR"
+    echo -e -n "Cacheando rutas..."
+    php artisan route:cache --no-interaction --quiet && echo -e "$NUBE_OK" || echo -e "$NUBE_ERROR"
+    echo -e -n "Cacheando vistas..."
+    php artisan view:cache --no-interaction --quiet && echo -e "$NUBE_OK" || echo -e "$NUBE_ERROR"
+}
+
+if [ -f artisan ]; then
+    echo -e "Framework encontrado: \e[1mLaravel\e[0m"
+
+    [ -n "${NUBE_DB_USER:-}" ] || nube_die "faltan credenciales de DB en $NUBE_SECRETS_FILE"
+
+    laravel_dotenv
+    laravel_permissions
+    laravel_max_key_workaround
+    laravel_cache
+
+    if [ "${NUBE_SKIP_MIGRATIONS:-0}" != "1" ]; then
+        echo "Corriendo migraciones..."
+        php artisan migrate --force --no-interaction
+    fi
+fi
+
+# --- Hook propio de la app ----------------------------------------------------
+
+if [ -x .nube/deploy ]; then
+    echo "Ejecutando .nube/deploy..."
+    NUBE_DOMAIN="$NUBE_DOMAIN" \
+    NUBE_PATH="$NUBE_APP_ROOT" \
+    NUBE_URL="$NUBE_URL" \
+    NUBE_REFS="$NUBE_REFS" \
+    NUBE_DB_USER="${NUBE_DB_USER:-}" \
+    NUBE_DB_PASS="${NUBE_DB_PASS:-}" \
+        ./.nube/deploy
+fi
+
+echo
+echo -e "\e[1;32mListo\e[0m → 🔗 \e[34;4m$NUBE_URL\e[0m"
+echo -e "Log: $NUBE_DEPLOY_LOG"

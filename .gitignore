@@ -1,1 +1,11 @@
 vendor/
+node_modules/
+
+# Logs y temporales
+*.log
+*.tmp
+*.swp
+
+# Sistema
+.DS_Store
+Thumbs.db

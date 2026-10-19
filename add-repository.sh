@@ -1,44 +1,79 @@
 #!/bin/bash
 #
-# Create new repository
+# Crea (o actualiza) el repositorio bare y el hook de deploy de una app.
+#
+# Uso:
+#   nr <app> [dominio]
+#
+# Si no se indica dominio, se usa el nombre de la app.
+# Imprime por stdout el SQL de MySQL; los mensajes van a stderr para que
+# se pueda encadenar:
+#
+#   nr mi-app mi-app.example.com | sudo mysql
+#
+# Este comando se ejecuta como el usuario dueno de la app (no como root).
 
-NAME=$1
-DOMAIN=${2:-$1}
+set -euo pipefail
 
+NUBE_SELF="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+    NUBE_SELF="$(readlink -f "$NUBE_SELF" 2>/dev/null || printf '%s' "$NUBE_SELF")"
+fi
+NUBE_DIR="$(cd -- "$(dirname -- "$NUBE_SELF")" && pwd)"
+# shellcheck source=/dev/null
+. "$NUBE_DIR/lib.sh"
+
+usage() {
+    cat >&2 <<EOF
+Uso: $(basename "$0") <app> [dominio]
+
+Ejemplos:
+  $(basename "$0") blog blog.example.com
+  $(basename "$0") blog blog.$NUBE_BASE_DOMAIN
+  $(basename "$0") blog            # usa "blog" como dominio
+EOF
+    exit 1
+}
+
+[ $# -ge 1 ] || usage
+
+NAME="$1"
+DOMAIN="${2:-$1}"
 REPO_DIR="$HOME/git/$NAME"
-POST_UPDATE_FILE="$REPO_DIR/hooks/post-update"
+HOOK_FILE="$REPO_DIR/hooks/post-update"
+DB_NAME="$(nube_slug "$DOMAIN")"
 
-NUBE_SLUG=$(echo $DOMAIN | sed 's/[-\.]/_/g')
-
-readonly NUBE_DB_CONN="mysql"
-readonly NUBE_DB_HOST="127.0.0.1"
-readonly NUBE_DB_PORT="3306"
-readonly NUBE_SECRETS_FILE="$HOME/secrets.gpg"
-
-[ -f $NUBE_SECRETS_FILE ] && $(gpg  -q --decrypt $NUBE_SECRETS_FILE)
+nube_valid_name "$NAME" || nube_die "nombre de app invalido: $NAME"
+nube_valid_domain "$DOMAIN" || nube_die "dominio invalido: $DOMAIN"
 
 if [ ! -d "$REPO_DIR" ]; then
-    echo "create repository folder" 1>&2
-    mkdir -p $REPO_DIR
-    cd $REPO_DIR
-    git init --bare 1>&2
-    echo "create post update hook" 1>&2
+    nube_info "creando repositorio $REPO_DIR"
+    mkdir -p "$HOME/git"
+    git init --bare --quiet "$REPO_DIR"
 else
-    echo "update post update hook" 1>&2
+    nube_info "actualizando repositorio existente $REPO_DIR"
 fi
 
-echo '#!/bin/bash' > $POST_UPDATE_FILE
-echo "# Generated on $(date)" >> $POST_UPDATE_FILE
-echo "nube-hook-post-update \$1 \"$DOMAIN\" \"$REPO_DIR\"" >> $POST_UPDATE_FILE
-chmod a+x $POST_UPDATE_FILE
+nube_info "escribiendo hook post-update"
+cat > "$HOOK_FILE" <<EOF
+#!/bin/bash
+# Generado por nr el $(date -u +%Y-%m-%dT%H:%M:%SZ)
+# No editar a mano: volve a ejecutar nr para regenerarlo.
+exec "$NUBE_HOOK_BIN" "\$1" "$DOMAIN" "$REPO_DIR"
+EOF
+chmod 0755 "$HOOK_FILE"
 
-echo "-- Copy this in mysql"
-echo ""
-echo "-- -----"
-echo ""
-echo "CREATE DATABASE IF NOT EXISTS $NUBE_SLUG;" 
-echo "GRANT ALL PRIVILEGES ON $NUBE_SLUG . * TO '$NUBE_DB_USER'@'$NUBE_DB_HOST';"
-echo "FLUSH PRIVILEGES;"
-echo ""
-echo "-- -----"
-echo ""
+# Asegura el directorio de deploy y el symlink en /var/www.
+nube_ensure_web_dir "$DOMAIN" >/dev/null
+
+nube_load_secrets
+if [ -z "${NUBE_DB_USER:-}" ]; then
+    nube_warn "no hay credenciales en $NUBE_SECRETS_FILE; no se puede generar el SQL"
+    exit 0
+fi
+
+cat <<SQL
+CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$NUBE_DB_USER'@'$NUBE_MYSQL_HOST';
+FLUSH PRIVILEGES;
+SQL

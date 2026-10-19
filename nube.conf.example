@@ -1,0 +1,54 @@
+# /etc/nube/nube.conf
+#
+# Configuracion del servidor Nube.
+# Copiar a /etc/nube/nube.conf y ajustar. No poner secretos aca:
+# este archivo debe ser legible por todos los usuarios de las apps.
+#
+# Los scripts leen estas variables y las exportan a los hooks de deploy.
+
+# Dominio base para los subdominios automaticos (app.<base>).
+# Debe tener un registro DNS wildcard *.NUBE_BASE_DOMAIN.
+NUBE_BASE_DOMAIN="nube.example.com"
+
+# Directorio donde viven los symlinks publicos de cada app.
+NUBE_WEB_ROOT="/var/www"
+
+# Grupo con permiso de lectura sobre los sitios y escritura en storage/.
+NUBE_WEB_GROUP="www-data"
+
+# Grupo que agrupa a los usuarios de deploy (para AllowGroups en sshd).
+NUBE_SSH_GROUP="nube"
+
+# Version de PHP instalada (solo informativa para los scripts).
+NUBE_PHP_VERSION="8.3"
+
+# Ruta de acme.sh y modo de emision de certificados:
+#   webroot   -> HTTP-01 contra NUBE_ACME_WEBROOT (recomendado para dominios sueltos)
+#   stateless -> modo stateless historico de acme.sh
+#   none      -> no emitir certificados (los gestiona otra herramienta)
+#
+# $HOME se expande al home del usuario que ejecuta nd (el usuario de deploy).
+# Si preferis emitir los certificados como root, apunta a /root/.acme.sh.
+NUBE_ACME_HOME="$HOME/.acme.sh"
+NUBE_ACME_MODE="webroot"
+NUBE_ACME_WEBROOT="/var/www/acme"
+
+# Donde se instalan los certificados para nginx (grupo www-data, modo 2775).
+NUBE_NGINX_SSL_DIR="/etc/nginx/ssl"
+
+# MySQL/MariaDB local.
+NUBE_MYSQL_HOST="127.0.0.1"
+NUBE_MYSQL_PORT="3306"
+
+# Credenciales cifradas de cada usuario. $HOME se expande al home del usuario.
+NUBE_SECRETS_FILE="$HOME/secrets.gpg"
+
+# Log de cada deploy (se agrega al final).
+NUBE_DEPLOY_LOG="$HOME/nube-deploy.log"
+
+# Binarios instalados por install.sh.
+NUBE_HOOK_BIN="/usr/local/bin/nube-hook-post-update"
+NUBE_NO_INTERACTIVE_LOGIN="/usr/local/lib/nube/no-interactive-login.sh"
+
+# Shell restringido para los usuarios de deploy.
+NUBE_GIT_SHELL="/usr/bin/git-shell"

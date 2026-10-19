@@ -1,0 +1,89 @@
+# /etc/fail2ban/jail.local
+#
+# Configuracion de fail2ban para un servidor Nube.
+# Instalar con:
+#   sudo apt install fail2ban
+#   sudo cp fail2ban/jail.local /etc/fail2ban/jail.local
+#   sudo cp fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
+#   sudo systemctl enable --now fail2ban
+#
+# Ajustar ignoreip con la IP desde la que administras el servidor.
+# Ver docs/06-seguridad.md para el detalle de cada jail.
+
+[DEFAULT]
+# Tiempo de ban por defecto: 1 hora.
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+
+# Nunca banear localhost. Agregar aca la IP de administracion si es fija.
+ignoreip = 127.0.0.1/8 ::1
+
+# iptables-multiport crea reglas propias y convive con UFW.
+banaction = iptables-multiport
+banaction_allports = iptables-allports
+
+[sshd]
+enabled  = true
+backend  = systemd
+mode     = aggressive
+maxretry = 3
+findtime = 10m
+bantime  = 24h
+
+# Fuerza bruta distribuida / escaneos de SSH.
+[sshd-ddos]
+enabled  = true
+backend  = systemd
+maxretry = 10
+findtime = 5m
+bantime  = 1h
+
+# Reincidentes: si vuelven despues del primer ban, una semana.
+# Lee el log de fail2ban, no el journal.
+[recidive]
+enabled  = true
+backend  = auto
+logpath  = /var/log/fail2ban.log
+maxretry = 3
+findtime = 1d
+bantime  = 1w
+
+# Fuerza bruta contra Basic Auth / auth de nginx.
+[nginx-http-auth]
+enabled  = true
+backend  = auto
+logpath  = /var/log/nginx/error.log
+maxretry = 5
+findtime = 10m
+bantime  = 1h
+
+# Escaneos de rutas tipicas (wp-login, phpmyadmin, .env, .git, etc.).
+# El filtro lee el access log de nginx.
+[nginx-nube-scan]
+enabled  = true
+backend  = auto
+filter   = nginx-nube-scan
+logpath  = /var/log/nginx/access.log
+maxretry = 3
+findtime = 10m
+bantime  = 1w
+
+# Exceso de requests (requiere limit_req en nginx, ver docs/06-seguridad.md).
+[nginx-req-limit]
+enabled  = true
+backend  = auto
+filter   = nginx-req-limit
+logpath  = /var/log/nginx/error.log
+maxretry = 5
+findtime = 1m
+bantime  = 10m
+
+# Bots maliciosos conocidos.
+[nginx-botsearch]
+enabled  = true
+backend  = auto
+logpath  = /var/log/nginx/error.log
+maxretry = 2
+findtime = 10m
+bantime  = 1d
