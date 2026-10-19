@@ -69,7 +69,9 @@ issue_certificate() {
 
     # Instala el certificado en una ruta estable para nginx.
     if mkdir -p "$cert_dir" 2>/dev/null && [ -w "$cert_dir" ]; then
-        sudo -n true 2>/dev/null && reload_args=(--reloadcmd "sudo -n systemctl reload nginx")
+        if sudo -n -l /usr/bin/systemctl reload nginx >/dev/null 2>&1; then
+            reload_args=(--reloadcmd "sudo -n systemctl reload nginx")
+        fi
         "$acme" --install-cert -d "$DOMAIN" "${reload_args[@]}" \
             --key-file "$cert_dir/key.pem" \
             --fullchain-file "$cert_dir/fullchain.pem"
@@ -83,4 +85,4 @@ issue_certificate || nube_warn "no se pudo emitir el certificado. Revisa DNS/acm
 nube_reload_nginx || true
 
 nube_info "listo: $(nube_url "$DOMAIN")"
-nube_info "repositorio: git remote add prod $USER@$(hostname -f 2>/dev/null || hostname):git/<app>"
+nube_info "repositorio: git remote add prod $NUBE_USER@$(hostname -f 2>/dev/null || hostname):git/<app>"

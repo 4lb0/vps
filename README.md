@@ -1,15 +1,20 @@
 # Nube
 
-**Tu propio mini-Heroku sobre un VPS con Ubuntu.** Hacés `git push` y la app
+**Tu propio mini-PaaS sobre un VPS con Ubuntu.** Hacés `git push` y la app
 queda publicada con HTTPS, base de datos y logs, sin depender de un proveedor
 de PaaS.
 
-Nube nació como los scripts del servidor `nube.pragmore.com` y hoy está
-pensado para que cualquiera pueda contratar un VPS, apuntar un dominio y
-publicar sus proyectos con el mismo flujo:
+Nube usa **un solo usuario de deploy** y **un dominio base**. El repositorio
+que estás leyendo es, además, la configuración del servidor: si hacés push a
+tu fork apuntando al VPS, Nube copia `nginx/` y `fail2ban/` a `/etc` y deja el
+servidor actualizado.
 
 ```bash
-git remote add prod juan@nube.example.com:git/mi-app
+# Configuracion del servidor (nginx, fail2ban, scripts)
+git push server main
+
+# Una app
+git remote add prod nube@nube.example.com:git/mi-app
 git push prod main
 # ...
 # Listo → https://mi-app.nube.example.com
@@ -22,36 +27,57 @@ git push prod main
 
 ## Cómo funciona
 
+Hay dos flujos de `git push`: uno para la configuración del servidor y otro
+para cada app.
+
 ```text
   Tu máquina                          VPS Ubuntu
-  ──────────                          ──────────────────────────────────────────
+  ──────────                          ─────────────────────────────────────────
+  git push server main
+        │                             ~/git/nube.git   (repositorio del servidor)
+        ▼                                   │
+  SSH (git-shell) ──────────────────▶  hooks/post-receive
+                                            │
+                                            ▼
+                                     nube-apply-config
+                                            │
+                      ┌─────────────────────┼─────────────────────┐
+                      ▼                     ▼                     ▼
+                 /usr/local            /etc/nginx            /etc/fail2ban
+                 (comandos)     (nginx.conf, conf.d,       (filters, jail)
+                                 snippets)
+                                            │
+                                            ▼
+                                    nginx -t + reload
+
   git push prod main
-        │
-        ▼
-  SSH (git-shell)  ──────────────▶  ~/git/<app>.git  (repositorio bare)
-                                          │
-                                          │ hooks/post-update
-                                          ▼
-                                    nube-hook-post-update
-                                          │
-                     ┌────────────────────┼────────────────────┐
-                     ▼                    ▼                    ▼
-              checkout en           .env + composer       migraciones /
-              /var/www/<dominio>    + caches              hooks propios
-                     │
-                     ▼
+        │                             ~/git/<app>.git  (repositorio de la app)
+        ▼                                   │
+  SSH (git-shell) ──────────────────▶  hooks/post-update
+                                            │
+                                            ▼
+                                     nube-hook-post-update
+                                            │
+                      ┌─────────────────────┼─────────────────────┐
+                      ▼                     ▼                     ▼
+               checkout en             .env + composer      migraciones /
+               /var/www/<dominio>      + caches             hooks propios
+                      │
+                      ▼
   HTTPS  ──────▶  nginx  ──────▶  PHP-FPM (www-data)  ──────▶  MySQL/MariaDB
-                  │
-                  └── /var/www/<dominio>/public
+                   │
+                   └── /var/www/<dominio>/public
 ```
 
-Cada app tiene:
+El servidor tiene:
 
-- un usuario Linux con `git-shell` (sin shell interactivo);
-- un repositorio bare en `~/git/<app>.git`;
-- una carpeta web en `~/www/<dominio>/public`, expuesta por un symlink en
-  `/var/www/<dominio>`;
-- un usuario y una base de datos MySQL propios;
+- **un usuario de deploy** (`nube`) con `git-shell` (sin shell interactivo);
+- **un repositorio del servidor** (`~/git/nube.git`) que aplica la
+  configuración al recibir un push;
+- **un repositorio bare por app** en `~/git/<app>.git`;
+- una carpeta web por dominio en `~/www/<dominio>/public`, expuesta por un
+  symlink en `/var/www/<dominio>`;
+- **un usuario y una base de MySQL por app**;
 - credenciales cifradas con GPG en `~/secrets.gpg`;
 - un hook que hace el deploy en cada push.
 
@@ -59,8 +85,9 @@ Cada app tiene:
 
 | Pieza | Detalle |
 | --- | --- |
+| Config del servidor por `git push` | `bootstrap.sh` + `nube-apply-config` + `nginx/`, `fail2ban/` |
 | Deploy por `git push` | Hook `post-update` + `nube-hook-post-update` |
-| Aislamiento de usuarios | `git-shell`, home restringido, claves SSH |
+| Usuario aislado | `git-shell`, home restringido, claves SSH |
 | Dominios y subdominios | `nd`, `ns` y `nr` |
 | HTTPS | `acme.sh` (HTTP-01 o DNS-01 para wildcard) |
 | PHP / Laravel | `composer install`, `.env`, caches, migraciones |
@@ -71,47 +98,67 @@ Cada app tiene:
 
 ## Inicio rápido
 
-Requisitos: un VPS con Ubuntu 24.04 LTS, un dominio y acceso root por SSH.
-El detalle está en [Preparar el servidor](docs/01-preparar-ubuntu.md) y
+Requisitos: un VPS con Ubuntu 24.04 LTS, un dominio y acceso root por SSH. El
+detalle está en [Preparar el servidor](docs/01-preparar-ubuntu.md) y
 [Dominio y DNS](docs/02-dominio-y-dns.md).
 
 ```bash
-# 1. Instalar Nube en el servidor
+# 1. En el servidor: clonar TU fork y preparar Nube
 sudo apt update && sudo apt install -y git
-sudo git clone https://github.com/4lb0/vps.git /opt/nube
+sudo git clone https://github.com/TU-USUARIO/vps.git /opt/nube
 cd /opt/nube
-sudo ./install.sh
-sudo nano /etc/nube/nube.conf     # dominio base, PHP, acme.sh
+sudo ./bootstrap.sh --base-domain nube.example.com \
+    --email yo@example.com --ssh-key-file ~/.ssh/id_ed25519.pub
 
-# 2. Crear un usuario de deploy
-sudo nube-add-user juan juan@example.com "ssh-ed25519 AAAA... juan@laptop"
+# 2. En tu máquina: apuntar tu fork al servidor
+git remote add server nube@nube.example.com:git/nube
+git push server main          # aplica nginx, fail2ban y los comandos
 
-# 3. Crear la app y su base de datos
-sudo runuser -u juan -- ns app
-sudo runuser -u juan -- nr app app.nube.example.com | sudo mysql
+# 3. Crear una app y su base de datos
+sudo runuser -u nube -- ns app
+sudo runuser -u nube -- nr app app.nube.example.com | sudo mysql
 
-# 4. Desde tu máquina
-git remote add prod juan@nube.example.com:git/app
+# 4. Publicarla
+git remote add prod nube@nube.example.com:git/app
 git push prod main
 ```
 
-Al terminar el push vas a ver el detalle del deploy y la URL. Si algo falla,
-el hook devuelve error y deja el detalle en `~/nube-deploy.log`.
+Al terminar el push de una app vas a ver el detalle del deploy y la URL. Si
+algo falla, el hook devuelve error y deja el detalle en `~/nube-deploy.log`.
+Si falla la configuración de nginx, el push del servidor la revierte y muestra
+el error de `nginx -t`.
 
 Para un **dominio propio** en lugar de un subdominio, usá `nd app.example.com`
 en el paso 3 (requiere acme.sh instalado para el usuario; ver
-[02 · Dominio y DNS](docs/02-dominio-y-dns.md#5-certificado-wildcard-para-nubeexamplecom)).
+[02 · Dominio y DNS](docs/02-dominio-y-dns.md)).
+
+## Cómo usar tu fork
+
+Nube está pensado para que cada servidor tenga su propio fork del repositorio:
+
+1. Hacé **fork** de `github.com/4lb0/vps` en tu cuenta.
+2. Cloná **tu fork** en el VPS (paso 1 del inicio rápido).
+3. Trabajá en local sobre tu fork y publicá los cambios en el servidor con
+   `git push server main`.
+
+Así podés adaptar nginx, fail2ban y los scripts sin afectar a nadie más, y
+cada push deja el servidor con exactamente lo que está en tu repositorio. Si
+más adelante querés incorporar mejoras del repositorio original, agregalo como
+remoto `upstream` y hacé `git merge upstream/main`.
 
 ## Comandos
 
 | Comando | Quién lo ejecuta | Qué hace |
 | --- | --- | --- |
-| `sudo nube-add-user <user> <email> [clave]` | root | Crea usuario, clave SSH, DB user y secretos |
-| `sudo runuser -u <user> -- nd <dominio>` | root | Prepara un dominio propio y emite TLS |
-| `sudo runuser -u <user> -- ns <subdominio>` | root | Prepara `<subdominio>.<base>` |
-| `sudo runuser -u <user> -- nr <app> [dominio]` | root | Crea el repo bare y el hook; imprime SQL |
+| `sudo ./bootstrap.sh ...` | root (una vez) | Configuración, usuario, repositorio del servidor y sudoers |
+| `sudo ./install.sh [origen]` | root | Aplica scripts + `nginx/` + `fail2ban/` |
+| `sudo nube-apply-config` | root | Vuelve a aplicar la config del repositorio del servidor |
+| `sudo nube-init-user [clave]` | root | Crea el usuario de deploy, su MySQL y `secrets.gpg` |
+| `sudo runuser -u nube -- nd <dominio>` | root | Prepara un dominio propio y emite TLS |
+| `sudo runuser -u nube -- ns <subdominio>` | root | Prepara `<subdominio>.<base>` |
+| `sudo runuser -u nube -- nr <app> [dominio]` | root | Crea el repo bare y el hook; imprime SQL |
 | `nr`, `nd`, `ns` | usuario de deploy | Igual que arriba, si ya estás como ese usuario |
-| `nube-hook-post-update` | git | Hook interno de deploy |
+| `nube-hook-post-update` | git | Hook interno de deploy de una app |
 | `nube-motd` | login | Banner del servidor |
 | `create-project.sh <app> <template> <origen> [prod]` | tu máquina | Crea un proyecto y configura `origin` y `prod` |
 | `make lint` | tu máquina | Valida la sintaxis de todos los scripts |
@@ -125,8 +172,8 @@ Referencia completa: [Comandos y variables](docs/referencia/comandos.md).
 | [00 · Introducción](docs/00-introduccion.md) | Servidor, VPS, hosting, dominio y DNS desde cero |
 | [01 · Preparar Ubuntu](docs/01-preparar-ubuntu.md) | Crear el VPS e instalar nginx, PHP, MySQL, Node y acme.sh |
 | [02 · Dominio y DNS](docs/02-dominio-y-dns.md) | Registrar el dominio, apuntarlo y configurar wildcard |
-| [03 · Instalar Nube](docs/03-instalar-nube.md) | `install.sh`, `/etc/nube/nube.conf` y nginx |
-| [04 · Usuarios y apps](docs/04-usuarios-y-aplicaciones.md) | Crear usuarios, dominios, repositorios y bases |
+| [03 · Instalar Nube](docs/03-instalar-nube.md) | `bootstrap.sh`, `install.sh`, `/etc/nube/nube.conf` y nginx |
+| [04 · El usuario y las apps](docs/04-usuario-y-apps.md) | El usuario de deploy, dominios, repositorios y bases |
 | [05 · Deploy con git](docs/05-deploy-con-git.md) | Cómo funciona el push, `.env`, Laravel, Node y rollback |
 | [06 · Seguridad](docs/06-seguridad.md) | SSH, fail2ban, UFW, nginx, PHP-FPM, MySQL y secretos |
 | [07 · Operación y backups](docs/07-operacion-y-backups.md) | Logs, actualizaciones, backups y restauración |
@@ -135,20 +182,19 @@ Referencia completa: [Comandos y variables](docs/referencia/comandos.md).
 | [Referencia · Comandos](docs/referencia/comandos.md) | Scripts, variables y archivos |
 | [Referencia · Plantillas](docs/referencia/plantillas.md) | `.env`, hooks propios y ejemplos |
 
-También hay ejemplos listos para copiar en
-[`docs/ejemplos/`](docs/ejemplos/): nginx, PHP-FPM por usuario, systemd para
-Node y un script de backup.
+También hay ejemplos listos para copiar en [`docs/ejemplos/`](docs/ejemplos/):
+systemd para Node y un script de backup. La configuración de nginx que Nube
+instala está en [`nginx/`](nginx/).
 
 ## Seguridad
 
-Nube está pensado para un VPS propio, no para revender hosting masivo sin
-aislamiento adicional. Antes de publicar clientes reales:
+Nube está pensado para un VPS propio. Antes de publicar algo real:
 
 1. Seguí la [guía de seguridad](docs/06-seguridad.md).
 2. Instalá el [jail de fail2ban](fail2ban/README.md).
-3. Revisá el aislamiento entre usuarios: por defecto todos los sitios corren
-   con el mismo pool de PHP-FPM (`www-data`). La guía incluye un pool por
-   usuario para separarlos.
+3. Tené en cuenta que quien puede hacer push al repositorio del servidor puede
+   instalar configuración como root (es el objetivo del proyecto). Protegé esa
+   clave y no la compartas.
 4. Configurá backups y probá una restauración.
 
 Para reportar una vulnerabilidad, leé [`SECURITY.md`](SECURITY.md).
@@ -161,8 +207,10 @@ Nube es deliberadamente chico y transparente:
 - **Sitios estáticos** funcionan poniendo los archivos en `public/`.
 - **Node, Python, Go o Docker** se pueden correr con systemd, PM2 o Docker;
   hay recetas en [Deploy con git](docs/05-deploy-con-git.md).
-- No hay panel web, ni autoescalado, ni deploy blue/green. Es un servidor
-  único con scripts que podés leer y modificar.
+- Es **un VPS, un usuario de deploy y un dominio base**. No es un hosting
+  multi-tenant: si necesitás alojar clientes que no confían entre sí, usá un
+  VPS por cliente.
+- No hay panel web, ni autoescalado, ni deploy blue/green.
 
 ## Créditos
 

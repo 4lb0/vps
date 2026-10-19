@@ -47,13 +47,11 @@ sudo du -sh /var/log/nginx/*.log
 - Actualizar el sistema: `sudo apt update && sudo apt upgrade`.
 - Revisar dependencias de las apps (`composer audit`, `npm audit`).
 - Probar una restauración de backup en un entorno de prueba.
-- Revisar usuarios y claves SSH:
+- Revisar las claves SSH del usuario de deploy:
 
   ```bash
   getent group nube
-  for u in $(getent group nube | cut -d: -f4 | tr ',' ' '); do
-      echo "== $u"; cat /home/$u/.ssh/authorized_keys 2>/dev/null
-  done
+  sudo cat /home/nube/.ssh/authorized_keys
   ```
 - Correr `lynis audit system` (opcional).
 
@@ -65,7 +63,7 @@ sudo du -sh /var/log/nginx/*.log
 | PHP-FPM | `sudo systemctl reload php8.3-fpm` |
 | MySQL | `sudo systemctl status mariadb` (o `mysql`) |
 | fail2ban | `sudo systemctl status fail2ban` |
-| PM2 de un usuario | `sudo runuser -u juan -- env HOME=/home/juan pm2 status` |
+| PM2 de un usuario | `sudo runuser -u nube -- env HOME=/home/nube pm2 status` |
 
 Recargar es más suave que reiniciar: nginx y PHP-FPM terminan las conexiones
 en curso antes de aplicar el cambio.
@@ -128,7 +126,8 @@ sudo apt autoremove
 sudo apt update && sudo apt upgrade php8.3-*
 
 # Nube
-cd /opt/nube && sudo git pull && sudo ./install.sh
+cd /opt/nube && sudo git pull && sudo ./bootstrap.sh   # idempotente
+# o, desde tu maquina: git push server main
 
 # Certificados (lo hace acme.sh por cron)
 sudo /root/.acme.sh/acme.sh --list
@@ -173,10 +172,10 @@ Ajustes:
 
 - **Cron del sistema**: `/etc/cron.d/nube` para tareas de root (backups,
   healthchecks).
-- **Cron por usuario**: `sudo runuser -u juan -- crontab -e`.
+- **Cron por usuario**: `sudo runuser -u nube -- crontab -e`.
 - **systemd timers**: más robustos que cron para tareas que deben correr una
   sola vez (`OnCalendar`, `Persistent=true`).
-- **Workers de Laravel**: `queue:work` como servicio systemd con `User=juan`,
+- **Workers de Laravel**: `queue:work` como servicio systemd con `User=nube`,
   no en cron.
 
 Ejemplo de timer + servicio systemd:
@@ -231,6 +230,6 @@ curl -fsS --retry 3 https://hc-ping.com/TU-UUID > /dev/null
 - [ ] Logs revisados periódicamente.
 - [ ] Actualizaciones automáticas de seguridad activas.
 - [ ] Monitor externo avisando si el sitio se cae.
-- [ ] Runbook propio actualizado con tus dominios y usuarios.
+- [ ] Runbook propio actualizado con tus dominios.
 
 Siguiente: [08 · Solución de problemas](08-solucion-de-problemas.md).

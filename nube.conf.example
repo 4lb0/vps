@@ -2,9 +2,24 @@
 #
 # Configuracion del servidor Nube.
 # Copiar a /etc/nube/nube.conf y ajustar. No poner secretos aca:
-# este archivo debe ser legible por todos los usuarios de las apps.
+# este archivo no es privado.
 #
 # Los scripts leen estas variables y las exportan a los hooks de deploy.
+# Todo lo que cambies aca se aplica tambien a nginx al hacer "git push"
+# del repositorio del servidor (ver docs/03-instalar-nube.md).
+
+# --- Identidad ---------------------------------------------------------------
+
+# El unico usuario de deploy: dueno de los repositorios y de los sitios.
+# Lo crea "nube-init-user" (o "bootstrap.sh"). Cambialo antes de crearlo.
+NUBE_USER="nube"
+
+# Email del usuario de deploy. Se usa como identidad de la clave GPG que
+# cifra las credenciales de MySQL. Si queda vacio, se usa
+# "$NUBE_USER@<hostname>".
+NUBE_USER_MAIL=""
+
+# --- Dominio y web -----------------------------------------------------------
 
 # Dominio base para los subdominios automaticos (app.<base>).
 # Debe tener un registro DNS wildcard *.NUBE_BASE_DOMAIN.
@@ -16,11 +31,13 @@ NUBE_WEB_ROOT="/var/www"
 # Grupo con permiso de lectura sobre los sitios y escritura en storage/.
 NUBE_WEB_GROUP="www-data"
 
-# Grupo que agrupa a los usuarios de deploy (para AllowGroups en sshd).
+# Grupo con acceso SSH (para AllowGroups en sshd). Se agrega al usuario.
 NUBE_SSH_GROUP="nube"
 
-# Version de PHP instalada (solo informativa para los scripts).
+# Version de PHP instalada (se usa en el fastcgi_pass de nginx).
 NUBE_PHP_VERSION="8.3"
+
+# --- Certificados ------------------------------------------------------------
 
 # Ruta de acme.sh y modo de emision de certificados:
 #   webroot   -> HTTP-01 contra NUBE_ACME_WEBROOT (recomendado para dominios sueltos)
@@ -33,22 +50,45 @@ NUBE_ACME_HOME="$HOME/.acme.sh"
 NUBE_ACME_MODE="webroot"
 NUBE_ACME_WEBROOT="/var/www/acme"
 
-# Donde se instalan los certificados para nginx (grupo www-data, modo 2775).
+# Donde se instalan los certificados para nginx (grupo www-data, modo 2770).
+# El wildcard del dominio base se guarda como <dir>/nube.crt y <dir>/nube.key.
 NUBE_NGINX_SSL_DIR="/etc/nginx/ssl"
 
-# MySQL/MariaDB local.
+# Directorios de la configuracion que aplica "git push" (no los cambies
+# salvo que sepas lo que haces).
+NUBE_NGINX_DIR="/etc/nginx"
+NUBE_FAIL2BAN_DIR="/etc/fail2ban"
+
+# --- MySQL/MariaDB local -----------------------------------------------------
+
 NUBE_MYSQL_HOST="127.0.0.1"
 NUBE_MYSQL_PORT="3306"
 
-# Credenciales cifradas de cada usuario. $HOME se expande al home del usuario.
+# --- Archivos del usuario de deploy ------------------------------------------
+
+# Credenciales cifradas del usuario. $HOME es el home del usuario de deploy.
 NUBE_SECRETS_FILE="$HOME/secrets.gpg"
 
 # Log de cada deploy (se agrega al final).
 NUBE_DEPLOY_LOG="$HOME/nube-deploy.log"
 
-# Binarios instalados por install.sh.
+# --- Repositorio del servidor ------------------------------------------------
+
+# Repositorio bare propio del servidor. Un push ahi aplica la configuracion
+# (nginx, fail2ban y los scripts). Ver docs/03-instalar-nube.md.
+NUBE_SERVER_REPO="/home/$NUBE_USER/git/nube.git"
+
+# Copia de trabajo desde la que se instala la configuracion.
+NUBE_SERVER_SRC="/srv/nube"
+
+# Rama que se aplica al recibir un push.
+NUBE_SERVER_REF="main"
+
+# --- Binarios instalados por install.sh --------------------------------------
+
 NUBE_HOOK_BIN="/usr/local/bin/nube-hook-post-update"
+NUBE_APPLY_BIN="/usr/local/bin/nube-apply-config"
 NUBE_NO_INTERACTIVE_LOGIN="/usr/local/lib/nube/no-interactive-login.sh"
 
-# Shell restringido para los usuarios de deploy.
+# Shell restringido para el usuario de deploy.
 NUBE_GIT_SHELL="/usr/bin/git-shell"

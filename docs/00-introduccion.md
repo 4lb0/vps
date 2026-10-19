@@ -93,8 +93,8 @@ Cuando alguien entra a `https://mi-app.example.com`:
 6. La respuesta vuelve por nginx al navegador.
 
 En Nube, el sitio de `mi-app.example.com` vive en
-`/var/www/mi-app.example.com/public`, que es un symlink al home del usuario
-dueño de la app.
+`/var/www/mi-app.example.com/public`, que es un symlink al home del usuario de
+deploy.
 
 ## 4. Tipos de proyecto y qué necesitan
 
@@ -140,7 +140,7 @@ completa y una de operación.
 | Configurar DNS | Vos |
 | Instalar y actualizar el sistema | Vos |
 | Configurar TLS | `acme.sh` + nginx |
-| Aislar usuarios y permisos | Nube (con límites, ver seguridad) |
+| Aislar el usuario y los permisos | Nube (con límites, ver seguridad) |
 | Backups | Vos (hay script de ejemplo) |
 | Código y dependencias de cada app | Cada proyecto |
 | Soporte de la app | Vos |
@@ -149,16 +149,18 @@ completa y una de operación.
 
 Nube automatiza la parte repetitiva:
 
-- crear usuarios sin shell y con claves SSH;
+- crear un usuario sin shell y con claves SSH;
+- mantener la configuración del servidor (nginx, fail2ban) en git y aplicarla
+  con un push;
 - crear repositorios bare y hooks de deploy;
 - separar base de datos y credenciales por app;
 - generar `.env` a partir de una plantilla;
 - correr Composer, migraciones y caches de Laravel;
 - emitir certificados y servir varios dominios con nginx.
 
-Lo que **no** hace: no es un panel multi-tenant hardened, no reemplaza un
-proveedor de correo, no hace backups solo y no escala horizontalmente. Es una
-base chica y legible para que la adaptes.
+Lo que **no** hace: no es un panel multi-tenant, no reemplaza un proveedor de
+correo, no hace backups solo y no escala horizontalmente. Es una base chica y
+legible para que la adaptes.
 
 ## Glosario
 

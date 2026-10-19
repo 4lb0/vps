@@ -3,19 +3,26 @@
 ## Alcance
 
 Nube es un conjunto de scripts para publicar aplicaciones en un VPS propio
-mediante `git push`. Corre con privilegios de root parcialmente (creación de
-usuarios, nginx, MySQL) y expone SSH y HTTP/HTTPS a Internet.
+mediante `git push`. Corre con privilegios de root parcialmente (creación del
+usuario, nginx, MySQL, fail2ban) y expone SSH y HTTP/HTTPS a Internet.
 
 ## Modelo de seguridad
 
-- Un VPS por administrador; los usuarios de deploy son de confianza relativa.
-- Los usuarios de deploy tienen `git-shell` (sin shell interactivo) y no
-  pertenecen a `sudo`.
-- Cada app tiene su propia base de datos y su propio usuario de MySQL.
+- Un VPS por administrador, con **un solo usuario de deploy**.
+- El usuario de deploy tiene `git-shell` (sin shell interactivo) y **no** tiene
+  sudo general: solo puede ejecutar tres comandos acotados
+  (`/etc/sudoers.d/nube`).
+- Cada app tiene su propia base de datos, con un único usuario de MySQL.
+- **Quien puede hacer push al repositorio del servidor puede instalar
+  configuración como root** (es el objetivo del proyecto: `nginx/` y
+  `fail2ban/` se aplican en cada push). Protegé esa clave: equivale a acceso
+  root. Si no lo querés, quitá el permiso del sudoers y aplicá la
+  configuración a mano.
 - Los secretos se guardan cifrados con GPG sin passphrase: protegen contra
   lectura casual, **no** contra acceso root.
-- Por defecto todos los sitios comparten el pool de PHP-FPM (`www-data`). Para
-  aislar clientes entre sí hay que configurar un pool por usuario.
+- Todos los sitios corren con el pool de PHP-FPM de `www-data`. Hay un solo
+  usuario de deploy, así que el aislamiento entre clientes no aplica: si
+  necesitás alojar clientes que no confían entre sí, usá un VPS por cliente.
 
 ## Superficie de ataque
 
@@ -24,11 +31,12 @@ usuarios, nginx, MySQL) y expone SSH y HTTP/HTTPS a Internet.
 - `PHP-FPM` y el código de cada aplicación.
 - `MySQL` (solo localhost).
 - `acme.sh` y su cron.
+- El hook del repositorio del servidor (ejecuta `install.sh` como root).
 
 ## Buenas prácticas obligatorias
 
 1. Solo claves SSH; `PermitRootLogin no` y `PasswordAuthentication no`.
-2. `AllowGroups sudo nube` y usuarios de deploy sin sudo.
+2. `AllowGroups sudo nube` y sudo acotado para el usuario de deploy.
 3. UFW activo con solo 22, 80 y 443.
 4. fail2ban activo (ver [`fail2ban/`](fail2ban/)).
 5. MySQL en `127.0.0.1`, sin `local_infile`.

@@ -2,11 +2,11 @@
 #
 # Configuracion de fail2ban para un servidor Nube.
 # Instalar con:
-#   sudo apt install fail2ban
-#   sudo cp fail2ban/jail.local /etc/fail2ban/jail.local
-#   sudo cp fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
+#   sudo apt install -y fail2ban
+#   sudo nube-apply-config          # copia este archivo a /etc/fail2ban/
 #   sudo systemctl enable --now fail2ban
 #
+# Ojo: "nube-apply-config" no pisa /etc/fail2ban/jail.local si ya existe.
 # Ajustar ignoreip con la IP desde la que administras el servidor.
 # Ver docs/06-seguridad.md para el detalle de cada jail.
 

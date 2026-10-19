@@ -17,16 +17,16 @@ tail -50 /home/<usuario>/nube-deploy.log
 - Tu clave no está en `~usuario/.ssh/authorized_keys`.
 
   ```bash
-  ssh -v juan@nube.example.com     # mirá qué clave ofrece
-  sudo cat /home/juan/.ssh/authorized_keys
+  ssh -v nube@nube.example.com     # mirá qué clave ofrece
+  sudo cat /home/nube/.ssh/authorized_keys
   ```
 
 - Permisos incorrectos (sshd los rechaza):
 
   ```bash
-  sudo chmod 700 /home/juan/.ssh
-  sudo chmod 600 /home/juan/.ssh/authorized_keys
-  sudo chown -R juan:juan /home/juan/.ssh
+  sudo chmod 700 /home/nube/.ssh
+  sudo chmod 600 /home/nube/.ssh/authorized_keys
+  sudo chown -R nube:nube /home/nube/.ssh
   ```
 
 - Estás usando `root` y `PermitRootLogin no` (correcto): entrá como tu
@@ -35,7 +35,7 @@ tail -50 /home/<usuario>/nube-deploy.log
 
   ```bash
   getent group nube sudo
-  groups juan
+  groups nube
   ```
 
 ### `Host key verification failed`
@@ -51,13 +51,13 @@ ssh-keygen -R nube.example.com
 El repositorio bare no existe o el nombre no coincide:
 
 ```bash
-sudo ls /home/juan/git/
+sudo ls /home/nube/git/
 ```
 
 Creá el repo con:
 
 ```bash
-sudo runuser -u juan -- nr <app> <dominio> | sudo mysql
+sudo runuser -u nube -- nr <app> <dominio> | sudo mysql
 ```
 
 ### El push queda colgado después de `remote:`
@@ -78,6 +78,35 @@ Cada mensaje de error indica el problema. Los más comunes:
 | `no se pudo descifrar .../secrets.gpg` | Clave GPG o `secrets.gpg` de otro usuario |
 | `Laravel necesita un .env` | Falta `.env.example` en el repo |
 | `faltan credenciales de DB` | `secrets.gpg` vacío o corrupto |
+
+## Configuración del servidor (`git push server main`)
+
+### `nube: error: no se pudo aplicar la configuracion`
+
+El push no cambia nada: Nube restaura la configuración anterior de nginx.
+Corré en el servidor para ver el error completo:
+
+```bash
+sudo nube-apply-config
+```
+
+Casi siempre es un `syntax error` en algún archivo de
+[`nginx/`](../nginx/), un `fastcgi_pass` con una versión de PHP que no existe
+(`NUBE_PHP_VERSION`), o un certificado que no se puede leer. Corregilo en el
+repositorio y volvé a hacer push.
+
+### `sudo: a password is required` en el hook
+
+Falta el sudoers acotado. Volvé a correr:
+
+```bash
+cd /opt/nube && sudo ./bootstrap.sh
+```
+
+### `nube: error: no existe el repositorio del servidor`
+
+El repositorio y su hook los crea `bootstrap.sh`: corré `sudo ./bootstrap.sh`
+en el clon del servidor.
 
 ## Web (nginx y PHP)
 
@@ -104,12 +133,13 @@ sudo ln -s /run/php/php8.3-fpm.sock /run/php/php-fpm.sock
   `/home/<usuario>`.
 
   ```bash
-  namei -l /home/juan/www/blog.example.com/public/index.php
+  namei -l /home/nube/www/blog.example.com/public/index.php
   ```
 
   Los directorios deben tener `x` para `www-data`; el home debe ser
-  `juan:www-data 750`.
-- Nginx bloqueando la ruta por `prevent-attacks` (`.env`, `.git`, `wp-admin`).
+  `nube:www-data 750`.
+- Nginx bloqueando la ruta por `nube-block-scanners` (`.env`, `.git`,
+  `wp-admin`, `phpmyadmin`).
 - `autoindex off` y no hay `index.html`/`index.php`.
 
 ### 404 en todas las rutas (Laravel)
@@ -126,7 +156,7 @@ curl -I https://blog.example.com/index.php
 Mirá el log de la app y el de PHP-FPM:
 
 ```bash
-tail -100 /home/juan/www/blog.example.com/storage/logs/laravel.log
+tail -100 /home/nube/www/blog.example.com/storage/logs/laravel.log
 sudo journalctl -u php8.3-fpm -n 50
 ```
 
@@ -139,7 +169,7 @@ El push llegó a un directorio distinto del que nginx sirve:
 
 ```bash
 ls -l /var/www/blog.example.com
-# debe ser un symlink a /home/juan/www/blog.example.com
+# debe ser un symlink a /home/nube/www/blog.example.com
 readlink -f /var/www/blog.example.com
 ```
 
@@ -204,8 +234,8 @@ El `.env` tiene credenciales viejas. Hacé un push para que el hook las
 actualice, o revisá:
 
 ```bash
-sudo runuser -u juan -- env HOME=/home/juan gpg -d /home/juan/secrets.gpg
-sudo mysql -e "SELECT user, host FROM mysql.user WHERE user LIKE 'juan%';"
+sudo runuser -u nube -- env HOME=/home/nube gpg -d /home/nube/secrets.gpg
+sudo mysql -e "SELECT user, host FROM mysql.user WHERE user LIKE 'nube%';"
 ```
 
 ### `Can't connect to MySQL server`

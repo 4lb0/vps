@@ -114,9 +114,9 @@ Description=blog (Nube)
 After=network.target
 
 [Service]
-User=juan
-WorkingDirectory=/home/juan/www/blog.example.com
-ExecStart=/home/juan/www/blog.example.com/.venv/bin/gunicorn app:app -b 127.0.0.1:8000
+User=nube
+WorkingDirectory=/home/nube/www/blog.example.com
+ExecStart=/home/nube/www/blog.example.com/.venv/bin/gunicorn app:app -b 127.0.0.1:8000
 Restart=on-failure
 
 [Install]
@@ -177,8 +177,8 @@ Description=blog queue worker
 After=network.target mysql.service
 
 [Service]
-User=juan
-WorkingDirectory=/home/juan/www/blog.example.com
+User=nube
+WorkingDirectory=/home/nube/www/blog.example.com
 ExecStart=/usr/bin/php artisan queue:work --sleep=3 --tries=3 --max-time=3600
 Restart=always
 RestartSec=5

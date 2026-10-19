@@ -1,60 +1,65 @@
 # nginx
 
-Configuración del servidor original (`nube.pragmore.com`). Muchos archivos de
-este directorio son específicos de ese servidor; para una instalación nueva
-usá la configuración genérica de
-[`docs/ejemplos/nginx/`](../docs/ejemplos/nginx/), que incluye TLS, rate limit
-y headers de seguridad.
+Configuración de nginx que instala Nube. **No es un ejemplo a copiar a mano:**
+`install.sh` (y por lo tanto un `git push server main`) copia estos archivos a
+`/etc/nginx/` reemplazando `#NUBE_*#` por los valores de
+`/etc/nube/nube.conf`.
+
+Para cambiar la configuración de nginx editá estos archivos y hacé push al
+repositorio del servidor:
+
+```bash
+# en tu máquina
+$EDITOR nginx/conf.d/nube.conf
+git commit -am "nginx: ajustar rate limit"
+git push server main
+```
+
+El hook verifica con `nginx -t` antes de recargar; si la configuración no
+valida, **la restaura** y el push falla con el error de nginx.
 
 ## Archivos
 
-### Reutilizables
+| Archivo | Destino | Para qué |
+| --- | --- | --- |
+| `nginx.conf` | `/etc/nginx/nginx.conf` | Configuración principal, logs y compresión |
+| `conf.d/nube.conf` | `/etc/nginx/conf.d/nube.conf` | Server blocks (HTTP, wildcard y dominios propios) |
+| `snippets/nube-acme.conf` | `/etc/nginx/snippets/` | Challenge HTTP-01 de acme.sh |
+| `snippets/nube-ssl.conf` | `/etc/nginx/snippets/` | Parámetros TLS |
+| `snippets/nube-php-fpm.conf` | `/etc/nginx/snippets/` | Estáticos + PHP-FPM + páginas de error |
+| `snippets/nube-security-headers.conf` | `/etc/nginx/snippets/` | Headers de seguridad y rate limit |
+| `snippets/nube-block-scanners.conf` | `/etc/nginx/snippets/` | Bloqueo de wp-login, phpmyadmin, websql |
 
-| Archivo | Para qué |
+## Placeholders
+
+| Placeholder | Valor |
 | --- | --- |
-| `nginx.conf` | Configuración principal (log format `main`, `server_tokens off`, includes) |
-| `default.d/server.conf` | `try_files` + PHP-FPM para cada sitio |
-| `default.d/prevent-attacks.conf` | Bloquea `wp-login`, `phpmyadmin`, etc. |
-| `default.d/ssl.conf` | Certificado por `$ssl_server_name` desde `~/.acme.sh` |
-| `ssl` | Parámetros TLS (protocolos, ciphers, sesiones) |
-| `fastcgi.conf` | Parámetros FastCGI usados por PHP-FPM |
-| `mime.types` | Tipos MIME |
-| `conf.d/gzip.conf` | Compresión gzip |
-| `conf.d/brotli.conf` | Compresión Brotli (requiere módulo) |
-| `modules/*.conf` | Carga de módulos dinámicos (brotli, headers-more) |
+| `#NUBE_BASE_DOMAIN#` | `NUBE_BASE_DOMAIN` |
+| `#NUBE_BASE_DOMAIN_REGEX#` | `NUBE_BASE_DOMAIN` con los puntos escapados |
+| `#NUBE_WEB_ROOT#` | `NUBE_WEB_ROOT` |
+| `#NUBE_WEB_GROUP#` | `NUBE_WEB_GROUP` |
+| `#NUBE_PHP_VERSION#` | `NUBE_PHP_VERSION` |
+| `#NUBE_NGINX_SSL_DIR#` | `NUBE_NGINX_SSL_DIR` |
+| `#NUBE_ACME_WEBROOT#` | `NUBE_ACME_WEBROOT` |
 
-### Específicos de `nube.pragmore.com`
+## Certificados
 
-Estos archivos **no** sirven para otra instalación sin editar:
+- **Wildcard** (`*.NUBE_BASE_DOMAIN`): `/etc/nginx/ssl/nube.crt` y `nube.key`.
+  Lo emite `acme.sh` con DNS-01 (ver
+  [02 · Dominio y DNS](../docs/02-dominio-y-dns.md)).
+- **Dominios propios**: `/etc/nginx/ssl/<dominio>/fullchain.pem` y `key.pem`,
+  instalados por `nd`.
+- Si todavía no hay certificado wildcard, `install.sh` deja uno autofirmado
+  para que nginx pueda arrancar. Reemplazalo cuanto antes.
 
-| Archivo | Qué tiene |
-| --- | --- |
-| `conf.d/deploymy.site.conf` | Redirect de un dominio propio a `nube.pragmore.com` |
-| `conf.d/domains-sale.conf` | Dominios en venta de Pragmore |
-| `conf.d/reduceurl_redirects.conf` | Sitio `reduceurl.com` (`kv.ar`, `now.ar`) |
+## Antes de recargar
 
-Si no los necesitás, borralos antes de copiar `conf.d/` a tu servidor.
-
-## Instalación
-
-Seguí [`docs/03-instalar-nube.md`](../docs/03-instalar-nube.md). Resumen:
-
-```bash
-sudo cp nginx/nginx.conf /etc/nginx/nginx.conf
-sudo cp -r nginx/default.d /etc/nginx/
-sudo cp nginx/ssl /etc/nginx/ssl.conf
-sudo cp nginx/fastcgi.conf /etc/nginx/fastcgi.conf
-# Solo los que uses:
-sudo cp nginx/conf.d/gzip.conf /etc/nginx/conf.d/
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-## Diferencias con los ejemplos
-
-- Estos archivos emiten/leen certificados desde `~/.acme.sh` con
-  `--stateless`; los ejemplos usan `--install-cert` a `/etc/nginx/ssl`.
-- El `fastcgi_pass` está fijado a `php8.1-fpm.sock`; ajustalo a tu versión.
-- Los ejemplos agregan headers de seguridad, rate limit y TLS moderno.
-- El `log_format main` incluye `$host` al inicio; el filtro de fail2ban
-  [`nginx-nube-scan`](../fail2ban/filter.d/nginx-nube-scan.conf) asume esa
-  forma (o la de `nginx.conf` en los ejemplos).
+1. `fastcgi_pass` usa `php<NUBE_PHP_VERSION>-fpm.sock`: si instalaste otra
+   versión de PHP, cambiá `NUBE_PHP_VERSION` en `/etc/nube/nube.conf` y volvé
+   a aplicar la configuración.
+2. El paquete de Ubuntu deja `/etc/nginx/sites-enabled/default`; esta
+   configuración **no** incluye `sites-enabled`, así que ese archivo no se usa.
+   Si tenés sitios ahí, migralos a `conf.d/`.
+3. Módulos como Brotli o `headers-more` no vienen en el paquete de Ubuntu: si
+   los instalás, cargalos en `/etc/nginx/modules-enabled/` a mano. Este repo
+   no los requiere.

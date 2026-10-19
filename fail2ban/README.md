@@ -6,11 +6,15 @@ en [`docs/06-seguridad.md`](../docs/06-seguridad.md).
 ## Instalacion
 
 ```bash
-sudo apt install fail2ban
-sudo cp fail2ban/jail.local /etc/fail2ban/jail.local
-sudo cp fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
+sudo apt install -y fail2ban
+sudo nube-apply-config          # copia los filtros y crea jail.local
 sudo systemctl enable --now fail2ban
 ```
+
+`nube-apply-config` (lo mismo que `install.sh`, y lo que corre cada
+`git push server main`) copia `fail2ban/filter.d/*.conf` siempre, y crea
+`/etc/fail2ban/jail.local` **solo si no existe**: si cambiaste el
+`jail.local` del servidor, no se pisa.
 
 Antes de reiniciar, edita `/etc/fail2ban/jail.local`:
 

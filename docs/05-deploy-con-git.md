@@ -3,6 +3,10 @@
 Así funciona el flujo que hace Nube: un `git push` actualiza el código,
 instala dependencias y deja la app publicada.
 
+> Este capítulo es para las **apps**. La configuración del servidor (nginx,
+> fail2ban y los scripts) se publica aparte, con `git push server main`; ver
+> [03 · Instalar Nube](03-instalar-nube.md#6-aplicar-cambios-con-git-push).
+
 ## 1. Configurar el remoto
 
 Desde la carpeta de tu proyecto:
@@ -12,15 +16,15 @@ git init                        # si todavía no es un repo
 git add .
 git commit -m "primer commit"
 
-git remote add prod juan@nube.example.com:git/blog
+git remote add prod nube@nube.example.com:git/blog
 git push prod main
 ```
 
-La ruta `juan@host:git/blog` es el repositorio bare `~/git/blog.git` del
+La ruta `nube@host:git/blog` es el repositorio bare `~/git/blog.git` del
 usuario. También podés usar la forma explícita:
 
 ```bash
-git remote add prod ssh://juan@nube.example.com/home/juan/git/blog.git
+git remote add prod ssh://nube@nube.example.com/home/nube/git/blog.git
 ```
 
 Para no escribir `prod` cada vez:
@@ -71,7 +75,7 @@ Framework encontrado: Laravel
 Cacheando configuracion... ok
 Corriendo migraciones...
 Listo → https://blog.example.com
-Log: /home/juan/nube-deploy.log
+Log: /home/nube/nube-deploy.log
 ```
 
 Si un paso falla, el push termina con error y el detalle queda en
@@ -117,7 +121,7 @@ Para secretos que no querés versionar, agregalos a mano en el `.env` del
 servidor:
 
 ```bash
-sudo runuser -u juan -- bash -c 'cat >> /home/juan/www/blog.example.com/.env' <<'EOF'
+sudo runuser -u nube -- bash -c 'cat >> /home/nube/www/blog.example.com/.env' <<'EOF'
 MAIL_PASSWORD=...
 EOF
 ```
@@ -176,9 +180,9 @@ servicio que lo mantenga vivo, y nginx actuando como proxy inverso.
 Receta con **PM2**, que corre como el usuario de deploy:
 
 ```bash
-# En el servidor, como el usuario juan
-sudo runuser -u juan -- npm install -g pm2
-sudo runuser -u juan -- pm2 startup systemd -u juan --hp /home/juan
+# En el servidor, como el usuario nube
+sudo runuser -u nube -- npm install -g pm2
+sudo runuser -u nube -- pm2 startup systemd -u nube --hp /home/nube
 # pm2 imprime un comando sudo; ejecutalo
 ```
 
@@ -190,7 +194,7 @@ module.exports = {
   apps: [{
     name: "blog",
     script: "server.js",
-    cwd: "/home/juan/www/blog.example.com",
+    cwd: "/home/nube/www/blog.example.com",
     env: { PORT: 3000, NODE_ENV: "production" }
   }]
 };
@@ -207,17 +211,33 @@ pm2 startOrReload ecosystem.config.js
 pm2 save
 ```
 
-Y en nginx, reemplazá `include .../nube-php-fpm.conf;` por un proxy:
+Y en nginx: la configuración del servidor se versiona en `nginx/`. Para una
+app Node agregá un `server` block **antes** del wildcard de
+`nginx/conf.d/nube.conf`, con el proxy al puerto local:
 
 ```nginx
-location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name blog.nube.example.com;
+
+    ssl_certificate     /etc/nginx/ssl/nube.crt;
+    ssl_certificate_key /etc/nginx/ssl/nube.key;
+
+    include /etc/nginx/snippets/nube-ssl.conf;
+    include /etc/nginx/snippets/nube-security-headers.conf;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 ```
+
+Después: `git push server main` (Nube valida con `nginx -t` y recarga).
 
 Hay un ejemplo completo en
 [`docs/ejemplos/systemd/`](ejemplos/systemd/) y
@@ -252,7 +272,7 @@ Podés correr un contenedor y proxear desde nginx. En el servidor:
 
 ```bash
 sudo apt install -y docker.io docker-compose-v2
-sudo usermod -aG docker juan      # el usuario debe volver a entrar (push nuevo)
+sudo usermod -aG docker nube      # el usuario debe volver a entrar (push nuevo)
 ```
 
 `docker-compose.yml` en el repo, y en `.nube/deploy`:
@@ -307,10 +327,10 @@ entrada.
 
 ```bash
 # Log del usuario
-tail -f /home/juan/nube-deploy.log
+tail -f /home/nube/nube-deploy.log
 
 # Errores de la app (Laravel)
-tail -f /home/juan/www/blog.example.com/storage/logs/laravel.log
+tail -f /home/nube/www/blog.example.com/storage/logs/laravel.log
 
 # nginx
 sudo tail -f /var/log/nginx/error.log

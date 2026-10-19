@@ -8,9 +8,9 @@
 #
 # Ejemplos:
 #   create-project.sh blog laravel/laravel \
-#     git@github.com:juan/blog.git juan@nube.example.com:git/blog
+#     git@github.com:nube/blog.git nube@nube.example.com:git/blog
 #
-#   create-project.sh api laravel/laravel git@github.com:juan/api.git
+#   create-project.sh api laravel/laravel git@github.com:nube/api.git
 
 set -euo pipefail
 
@@ -19,8 +19,8 @@ usage() {
 Uso: $(basename "$0") <nombre> <template-composer> <origin-url> [<prod-url>]
 
 Ejemplos:
-  $(basename "$0") blog laravel/laravel git@github.com:juan/blog.git juan@nube.example.com:git/blog
-  $(basename "$0") api  laravel/laravel git@github.com:juan/api.git
+  $(basename "$0") blog laravel/laravel git@github.com:nube/blog.git nube@nube.example.com:git/blog
+  $(basename "$0") api  laravel/laravel git@github.com:nube/api.git
 
 El template es cualquier paquete de Composer (laravel/laravel, symfony/skeleton...).
 Si no indicas prod-url, igual se puede agregar despues con git remote add.

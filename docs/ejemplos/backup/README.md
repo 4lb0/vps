@@ -82,7 +82,7 @@ sudo systemctl restart php8.3-fpm fail2ban
 Después del restore:
 
 1. Verificá permisos (`chown -R usuario:www-data /home/usuario/www`).
-2. Revisá `secrets.gpg` de cada usuario.
+2. Revisá `secrets.gpg` del usuario de deploy.
 3. Hacé un deploy de prueba para confirmar que el hook funciona.
 
 ## 5. Frecuencia sugerida

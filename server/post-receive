@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Hook post-receive del repositorio del servidor ($NUBE_SERVER_REPO).
+#
+# Se instala en <repo>/hooks/post-receive y lo ejecuta git en cada push.
+# Aplica la configuracion (nginx, fail2ban y scripts) a traves del comando
+# sudoers "nube-apply-config".
+#
+# No editar a mano: volve a correr bootstrap.sh para regenerarlo.
+
+set -euo pipefail
+
+NUBE_REF="${NUBE_SERVER_REF:-main}"
+
+apply=0
+while read -r _old _new ref; do
+    [ -n "$ref" ] || continue
+    if [ "$ref" = "refs/heads/$NUBE_REF" ]; then
+        apply=1
+    fi
+done
+
+if [ "$apply" -ne 1 ]; then
+    echo "nube: push recibido, pero no es la rama $NUBE_REF: no aplico nada."
+    exit 0
+fi
+
+echo "nube: aplicando la configuracion del servidor..."
+if ! sudo -n /usr/local/bin/nube-apply-config; then
+    echo "nube: error: no se pudo aplicar la configuracion." >&2
+    echo "nube: revisa 'sudo nube-apply-config' en el servidor." >&2
+    exit 1
+fi
+
+echo "nube: configuracion del servidor aplicada."

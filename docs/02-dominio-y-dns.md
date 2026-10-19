@@ -149,10 +149,10 @@ Para un dominio suelto (`app.example.com`), `nd` emite el certificado por
 HTTP-01 usando acme.sh del usuario de deploy:
 
 ```bash
-sudo runuser -u juan -- env HOME=/home/juan sh -c \
-  'curl https://get.acme.sh | sh -s email=juan@example.com'
+sudo runuser -u nube -- env HOME=/home/nube sh -c \
+  'curl https://get.acme.sh | sh -s email=nube@example.com'
 
-sudo runuser -u juan -- nd app.example.com
+sudo runuser -u nube -- nd app.example.com
 ```
 
 El certificado queda instalado en `/etc/nginx/ssl/app.example.com/`
@@ -160,8 +160,8 @@ El certificado queda instalado en `/etc/nginx/ssl/app.example.com/`
 pueda escribir ahí, `/etc/nginx/ssl` debe existir con grupo `www-data` y modo
 `2770` (lo crea `install.sh`; ver también [01](01-preparar-ubuntu.md#12-directorios-y-permisos)).
 
-Si preferís no instalar acme.sh por usuario, poné `NUBE_ACME_MODE="none"` y
-gestioná los certificados desde root con
+Si preferís no instalar acme.sh para el usuario, poné
+`NUBE_ACME_MODE="none"` y gestioná los certificados desde root con
 `--install-cert` hacia `/etc/nginx/ssl/<dominio>/`.
 
 ## 6. Cloudflare: proxy y IP real

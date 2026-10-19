@@ -4,13 +4,45 @@ Referencia de la interfaz de Nube.
 
 ## Comandos
 
-### `nube-add-user <usuario> <email> [<clave-publica>]`
+### `bootstrap.sh [opciones]`
 
-Alias: `add-user.sh`. Requiere **root**.
+Requiere **root** y se corre **una vez**, en el clon del repositorio.
 
-Crea el usuario de deploy con `git-shell`, su usuario de MySQL, `secrets.gpg`
-y la clave SSH. Detalle en
-[04 · Usuarios y apps](../04-usuarios-y-aplicaciones.md#2-crear-un-usuario).
+Aplica la configuración, crea el usuario de deploy, crea el repositorio del
+servidor (`~/git/nube.git`) con su hook y habilita el sudoers acotado.
+Opciones: `--base-domain`, `--user`, `--email`, `--php`, `--ssh-key`,
+`--ssh-key-file`. Ver
+[03 · Instalar Nube](../03-instalar-nube.md#2-preparar-el-servidor-con-bootstrapsh).
+
+### `install.sh [directorio-origen]`
+
+Requiere **root**. Sin argumentos usa el directorio del script.
+
+Copia los scripts a `/usr/local/lib/nube`, crea los comandos, deja
+`/etc/nube/nube.conf` (solo si no existe) y aplica `nginx/` y `fail2ban/` con
+backup y rollback si `nginx -t` falla.
+
+Es el comando que ejecuta `nube-apply-config` en cada push al repositorio del
+servidor.
+
+### `nube-apply-config`
+
+Requiere **root**. Hace checkout de `$NUBE_SERVER_REF` desde
+`$NUBE_SERVER_REPO` en `$NUBE_SERVER_SRC` y ejecuta el `install.sh` de esa
+copia.
+
+```bash
+sudo nube-apply-config
+```
+
+### `nube-init-user [<clave-publica> | --key-file <archivo.pub>]`
+
+Alias interno: `init-user.sh`. Requiere **root**.
+
+Crea el usuario `$NUBE_USER` con `git-shell`, su usuario de MySQL,
+`secrets.gpg` y la clave SSH. Si el usuario ya existe, solo agrega la clave.
+Detalle en
+[04 · El usuario y las apps](../04-usuario-y-apps.md#2-el-usuario-de-deploy).
 
 ### `nr <app> [<dominio>]`
 
@@ -20,7 +52,7 @@ Crea/actualiza `~/git/<app>.git` y su hook, asegura el directorio web e
 imprime el SQL de MySQL por stdout.
 
 ```bash
-sudo runuser -u juan -- nr blog blog.example.com | sudo mysql
+sudo runuser -u nube -- nr blog blog.example.com | sudo mysql
 ```
 
 Errores posibles: nombre o dominio inválido, permisos en `/var/www`, falta de
@@ -32,7 +64,7 @@ Alias interno: `add-domain.sh`. Como el usuario de deploy.
 
 Crea el sitio, la página inicial y emite/instala el certificado según
 `NUBE_ACME_MODE`. Ver
-[04](../04-usuarios-y-aplicaciones.md#4-crear-una-app-en-un-dominio-propio).
+[04](../04-usuario-y-apps.md#4-crear-una-app-en-un-dominio-propio).
 
 ### `ns <subdominio>`
 
@@ -65,22 +97,30 @@ Prueba de humo del deploy desde tu máquina.
 
 | Variable | Default | Descripción |
 | --- | --- | --- |
-| `NUBE_BASE_DOMAIN` | `nube.pragmore.com` | Dominio base de los subdominios |
+| `NUBE_USER` | `nube` | El único usuario de deploy |
+| `NUBE_USER_MAIL` | vacío | Email de la clave GPG del usuario |
+| `NUBE_BASE_DOMAIN` | `nube.example.com` | Dominio base de los subdominios |
 | `NUBE_WEB_ROOT` | `/var/www` | Directorio de symlinks |
 | `NUBE_WEB_GROUP` | `www-data` | Grupo con acceso a los sitios |
-| `NUBE_SSH_GROUP` | `nube` | Grupo de usuarios de deploy |
-| `NUBE_PHP_VERSION` | `8.3` | Versión de PHP (informativa) |
+| `NUBE_SSH_GROUP` | `nube` | Grupo con acceso SSH |
+| `NUBE_PHP_VERSION` | `8.3` | Versión de PHP (socket de nginx) |
 | `NUBE_ACME_HOME` | `$HOME/.acme.sh` | acme.sh del usuario que corre `nd` |
 | `NUBE_ACME_MODE` | `webroot` | `webroot`, `stateless` o `none` |
 | `NUBE_ACME_WEBROOT` | `/var/www/acme` | Webroot del challenge HTTP-01 |
 | `NUBE_NGINX_SSL_DIR` | `/etc/nginx/ssl` | Destino de los certificados |
+| `NUBE_NGINX_DIR` | `/etc/nginx` | Configuración de nginx que se aplica |
+| `NUBE_FAIL2BAN_DIR` | `/etc/fail2ban` | Configuración de fail2ban que se aplica |
 | `NUBE_MYSQL_HOST` | `127.0.0.1` | Host de MySQL |
 | `NUBE_MYSQL_PORT` | `3306` | Puerto de MySQL |
 | `NUBE_SECRETS_FILE` | `$HOME/secrets.gpg` | Credenciales cifradas |
 | `NUBE_DEPLOY_LOG` | `$HOME/nube-deploy.log` | Log de deploys |
-| `NUBE_HOOK_BIN` | `/usr/local/bin/nube-hook-post-update` | Hook |
+| `NUBE_SERVER_REPO` | `/home/<usuario>/git/nube.git` | Repositorio del servidor |
+| `NUBE_SERVER_SRC` | `/srv/nube` | Copia de trabajo de la configuración |
+| `NUBE_SERVER_REF` | `main` | Rama que se aplica en cada push |
+| `NUBE_HOOK_BIN` | `/usr/local/bin/nube-hook-post-update` | Hook de las apps |
+| `NUBE_APPLY_BIN` | `/usr/local/bin/nube-apply-config` | Aplica la config del servidor |
 | `NUBE_NO_INTERACTIVE_LOGIN` | `/usr/local/lib/nube/no-interactive-login.sh` | Mensaje de git-shell |
-| `NUBE_GIT_SHELL` | `/usr/bin/git-shell` | Shell de los usuarios |
+| `NUBE_GIT_SHELL` | `/usr/bin/git-shell` | Shell del usuario de deploy |
 
 También se pueden pasar por entorno (`NUBE_BASE_DOMAIN=... nr ...`), pero en
 general conviene el archivo de configuración.
@@ -93,19 +133,23 @@ general conviene el archivo de configuración.
 
 | Ruta | Contenido |
 | --- | --- |
-| `/opt/nube/` | Repositorio clonado |
+| `/opt/nube/` | Repositorio clonado (tu fork) |
+| `/srv/nube/` | Copia de trabajo desde la que se aplica la config |
 | `/usr/local/lib/nube/` | Scripts y `lib/nube.sh` |
 | `/usr/local/bin/nr`, `nd`, `ns`, `nube-*` | Symlinks a los scripts |
 | `/etc/nube/nube.conf` | Configuración |
+| `/etc/sudoers.d/nube` | Permisos acotados del usuario de deploy |
 | `/var/www/<dominio>` | Symlink al sitio |
 | `/var/www/acme` | Challenge HTTP-01 |
-| `/etc/nginx/ssl/<dominio>/` | Certificados por dominio |
+| `/etc/nginx/ssl/<dominio>/` y `nube.crt` | Certificados |
+| `/etc/nginx/.nube-backup-*` | Backup de la última config de nginx aplicada |
 
-### Por usuario
+### Del usuario de deploy
 
 | Ruta | Contenido |
 | --- | --- |
-| `~/git/<app>.git` | Repositorio bare |
+| `~/git/nube.git` | Repositorio del servidor (aplica la config) |
+| `~/git/<app>.git` | Repositorio bare de cada app |
 | `~/www/<dominio>/public` | Web root |
 | `~/secrets.gpg` | `NUBE_DB_USER`, `NUBE_DB_PASS` |
 | `~/nube-deploy.log` | Salida de deploys |
@@ -122,14 +166,18 @@ blog.example.com  ->  blog_example_com
 mi-app.site.com   ->  mi_app_site_com
 ```
 
-Usuario: `<usuario>_<12 hex>`, creado por `add-user.sh`.
+Usuario: `<NUBE_USER>_<12 hex>`, creado por `nube-init-user`.
 
 ## Git
 
 ```bash
-# Remoto
-git remote add prod juan@nube.example.com:git/blog
-git remote add prod ssh://juan@nube.example.com/home/juan/git/blog.git
+# Configuracion del servidor
+git remote add server nube@nube.example.com:git/nube
+git push server main
+
+# App
+git remote add prod nube@nube.example.com:git/blog
+git remote add prod ssh://nube@nube.example.com/home/nube/git/blog.git
 
 # Deploy
 git push prod main
@@ -138,7 +186,7 @@ git push prod main
 git push --force prod <sha>:main
 
 # Ver el hook que corre el servidor
-ssh juan@nube.example.com   # muestra el mensaje de no-interactive-login
+ssh nube@nube.example.com   # muestra el mensaje de no-interactive-login
 ```
 
 ## Nginx
@@ -149,6 +197,9 @@ ssh juan@nube.example.com   # muestra el mensaje de no-interactive-login
 | `/etc/nginx/conf.d/nube.conf` | Server blocks |
 | `/etc/nginx/snippets/nube-*.conf` | Snippets de Nube |
 | `/var/log/nginx/access.log` | Formato `nube` (usado por fail2ban) |
+
+Se editan en [`nginx/`](../../nginx/) del repositorio y se aplican con
+`git push server main`.
 
 ## fail2ban
 

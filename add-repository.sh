@@ -11,7 +11,8 @@
 #
 #   nr mi-app mi-app.example.com | sudo mysql
 #
-# Este comando se ejecuta como el usuario dueno de la app (no como root).
+# Este comando se ejecuta como el usuario de deploy: el dueno de los
+# repositorios y de los sitios. No se ejecuta como root.
 
 set -euo pipefail
 

@@ -165,7 +165,7 @@ memory_limit = 256M
 ```
 
 Y en `/etc/php/8.3/fpm/pool.d/www.conf` ajustá `pm.max_children` según la RAM
-(ver [06 · Seguridad](06-seguridad.md#7-php-fpm-por-usuario)). Después:
+(ver [06 · Seguridad](06-seguridad.md#7-php-fpm)). Después:
 
 ```bash
 sudo systemctl restart php8.3-fpm
@@ -211,8 +211,8 @@ curl -sS https://getcomposer.org/installer \
 composer -V
 ```
 
-El hook de deploy ejecuta `composer` en cada push, así que debe estar
-disponible para todos los usuarios (está en `/usr/local/bin`).
+El hook de deploy ejecuta `composer` en cada push, así que tiene que estar en
+el PATH del usuario de deploy (instalado en `/usr/local/bin`).
 
 ## 10. Node.js (opcional)
 
@@ -247,8 +247,8 @@ Para un certificado **wildcard** hace falta DNS-01; se explica en
 
 ## 12. Directorios y permisos
 
-Nube publica los sitios en `/var/www/<dominio>` (symlinks a los homes). Para
-que los usuarios de deploy puedan crear sus enlaces, `/var/www` debe ser
+Nube publica los sitios en `/var/www/<dominio>` (symlinks al home del usuario
+de deploy). Para que el usuario pueda crear sus enlaces, `/var/www` debe ser
 escribible por el grupo `www-data`:
 
 ```bash
@@ -258,11 +258,13 @@ sudo chmod 2775 /var/www
 # Webroot compartido para el challenge HTTP-01 de acme.sh
 sudo install -d -o www-data -g www-data -m 2775 /var/www/acme
 
-# Destino de los certificados emitidos por los usuarios de deploy
+# Destino de los certificados emitidos por nd
 sudo install -d -o root -g www-data -m 2770 /etc/nginx/ssl
 
 ls -ld /var/www /var/www/acme /etc/nginx/ssl
 ```
+
+`install.sh` (y por lo tanto `bootstrap.sh`) también ajusta estas tres rutas.
 
 El bit `2` (setgid) hace que los archivos nuevos hereden el grupo del
 directorio (`www-data` en los dos primeros casos).

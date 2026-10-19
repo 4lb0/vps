@@ -14,15 +14,15 @@ componente de Nube.
 | --- | --- |
 | Fuerza bruta SSH | Solo claves, `fail2ban`, `AllowGroups` |
 | Robo de credenciales de apps | Secretos cifrados, `.env` fuera de git, permisos |
-| Escaneo de rutas (`.env`, `.git`, phpMyAdmin…) | `prevent-attacks`, headers, fail2ban |
-| Aislamiento entre clientes | PHP-FPM por usuario (opcional), MySQL por app |
+| Escaneo de rutas (`.env`, `.git`, phpMyAdmin…) | `block-scanners`, headers, fail2ban |
+| Configuración del servidor | Se versiona en el repo y se valida con `nginx -t` en cada push |
 | Dependencias vulnerables | Actualizaciones, `composer audit`, `npm audit` |
 | Kernel/servicios desactualizados | `unattended-upgrades` |
 | Fuga de datos | Backups cifrados, rotación de claves |
 
-Nube **no** es un hosting multi-tenant endurecido. Si vas a alojar clientes
-distintos, además de esta guía leé la sección
-[PHP-FPM por usuario](#php-fpm-por-usuario).
+Nube **no** es un hosting multi-tenant endurecido: hay un usuario de deploy y
+todos los sitios son tuyos. Si vas a alojar clientes que no confían entre sí,
+usá un VPS por cliente.
 
 ## 1. Checklist priorizada
 
@@ -34,7 +34,7 @@ distintos, además de esta guía leé la sección
 6. [ ] `/etc/nube/nube.conf` y secretos sin permisos de más.
 7. [ ] Headers, rate limit y TLS en nginx.
 8. [ ] Backups probados (ver [07](07-operacion-y-backups.md)).
-9. [ ] Si hay terceros: pool de PHP-FPM por usuario.
+9. [ ] Clave de push del servidor protegida (puede instalar config como root).
 10. [ ] Monitoreo de logs y auditoría ocasional.
 
 ## 2. SSH
@@ -48,7 +48,7 @@ KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 PermitEmptyPasswords no
 
-# Solo admins (sudo) y usuarios de deploy (nube) pueden conectarse.
+# Solo admins (sudo) y el usuario de deploy (nube) pueden conectarse.
 AllowGroups sudo nube
 
 MaxAuthTries 3
@@ -62,12 +62,12 @@ AllowTcpForwarding no
 PermitTunnel no
 ```
 
-`install.sh` crea el grupo `nube` y `add-user.sh` agrega cada usuario de
-deploy a ese grupo. Si creaste usuarios a mano:
+`install.sh` crea el grupo `nube` y `nube-init-user` agrega al usuario de
+deploy a ese grupo. Si lo creaste a mano:
 
 ```bash
 sudo groupadd -f nube
-sudo usermod -aG nube juan
+sudo usermod -aG nube nube
 ```
 
 Validá **antes** de reiniciar:
@@ -90,25 +90,29 @@ last -a | head
 - Usá **ed25519** o RSA de 4096 bits.
 - Protegé tu clave privada con passphrase y usá `ssh-agent`.
 - Una clave por dispositivo; borrá las viejas de `authorized_keys`.
-- No compartas `~/.ssh/id_ed25519` de los usuarios de deploy: esa clave es
-  para que **ellos** clonen repos privados, no para entrar.
+- No compartas `~/.ssh/id_ed25519` del usuario de deploy: esa clave es
+  para que **él** clone repositorios privados, no para entrar.
 
 ### Limitar qué puede hacer una clave
 
 Podés restringir una clave en `authorized_keys`:
 
 ```text
-from="203.0.113.0/24",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... juan@casa
+from="203.0.113.0/24",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... nube@casa
 ```
 
 ## 3. fail2ban
 
 ```bash
 sudo apt install -y fail2ban
-sudo cp fail2ban/jail.local /etc/fail2ban/jail.local
-sudo cp fail2ban/filter.d/*.conf /etc/fail2ban/filter.d/
+sudo nube-apply-config          # instala jail.local y los filtros
 sudo systemctl enable --now fail2ban
 ```
+
+`nube-apply-config` (o `install.sh`) copia `fail2ban/filter.d/*.conf` siempre y
+crea `/etc/fail2ban/jail.local` **solo si no existe**, para no pisar tus
+ajustes. Si cambiás `fail2ban/jail.local` en el repositorio y querés
+aplicarlo, borrá el del servidor y volvé a aplicar.
 
 Antes de reiniciar, editá `ignoreip` con tu IP de administración:
 
@@ -212,15 +216,14 @@ considerá Ubuntu Livepatch (gratis para uso personal).
 Actualizá también las dependencias de cada app:
 
 ```bash
-cd /home/juan/www/blog.example.com
-sudo runuser -u juan -- composer audit
-sudo runuser -u juan -- npm audit
+cd /home/nube/www/blog.example.com
+sudo runuser -u nube -- composer audit
+sudo runuser -u nube -- npm audit
 ```
 
 ## 6. Endurecer nginx
 
-La configuración de ejemplo
-([`docs/ejemplos/nginx/`](ejemplos/nginx/)) ya incluye:
+La configuración que Nube instala ([`nginx/`](../nginx/)) ya incluye:
 
 - `server_tokens off` (no expone la versión);
 - headers `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
@@ -229,7 +232,11 @@ La configuración de ejemplo
 - TLS 1.2/1.3 con ciphers modernos;
 - bloqueo de archivos ocultos y de extensiones peligrosas
   (`.env`, `.git`, `.sql`, `.bak`, configs);
+- bloqueo de rutas de WordPress, phpMyAdmin y websql;
 - `client_max_body_size` y timeouts acotados.
+
+Para endurecerla más, editá los archivos en `nginx/` y hacé
+`git push server main`: Nube valida con `nginx -t` antes de recargar.
 
 Además:
 
@@ -277,64 +284,44 @@ curl -sSI https://tu-dominio | grep -i strict-transport
 
 O usá el test externo de [SSL Labs](https://www.ssllabs.com/ssltest/).
 
-## 7. PHP-FPM por usuario
+## 7. PHP-FPM
 
-**Este es el punto más importante para alojar terceros.** Por defecto hay un
-solo pool (`www-data`) para todos los sitios: un bug en una app puede leer
-archivos de otra que sean legibles por grupo.
+Por defecto todos los sitios corren con el pool de `www-data`. Como hay un
+solo usuario de deploy y todas las apps son tuyas, alcanza.
 
-Podés crear un pool por usuario. Ejemplo para `juan` en
-`/etc/php/8.3/fpm/pool.d/juan.conf`:
+Si preferís que PHP corra como el usuario de deploy (por ejemplo, para que
+`storage/` y los archivos que escribe la app queden con su dueño), podés
+crear un pool (`/etc/php/8.3/fpm/pool.d/nube.conf`):
 
 ```ini
-[juan]
-user = juan
-group = juan
+[nube]
+user  = nube
+group = nube
 
-listen = /run/php/nube-juan.sock
+listen       = /run/php/nube-fpm.sock
 listen.owner = www-data
 listen.group = www-data
-listen.mode = 0660
+listen.mode  = 0660
 
-pm = ondemand
-pm.max_children = 5
+pm                   = ondemand
+pm.max_children      = 5
 pm.process_idle_timeout = 10s
-pm.max_requests = 500
-
-php_admin_value[open_basedir] = /home/juan:/tmp
-php_admin_value[session.save_path] = /home/juan/tmp
-php_admin_value[upload_tmp_dir] = /home/juan/tmp
-php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen
-
-php_admin_flag[log_errors] = on
-php_admin_value[error_log] = /home/juan/php-error.log
+pm.max_requests      = 500
 ```
-
-Creá el directorio de sesiones y recargá:
 
 ```bash
-sudo install -d -o juan -g juan -m 0700 /home/juan/tmp
 sudo systemctl reload php8.3-fpm
-ls -l /run/php/nube-juan.sock
+ls -l /run/php/nube-fpm.sock
 ```
 
-En el `server` de nginx de ese usuario:
+Y cambiar el `fastcgi_pass` en `nginx/snippets/nube-php-fpm.conf`:
 
 ```nginx
-fastcgi_pass unix:/run/php/nube-juan.sock;
+fastcgi_pass unix:/run/php/nube-fpm.sock;
 ```
 
-Precauciones:
-
-- `open_basedir` puede romper apps que leen fuera de su home. Probá antes de
-  aplicarlo a producción.
-- `disable_functions` puede romper Composer/artisan si se ejecutan vía web (no
-  debería) o librerías que usan `proc_open`. Ajustá la lista.
-- El pool debe correr como el usuario dueño para que `storage/` y los archivos
-  tengan los permisos correctos. Alternativamente, dejá `www-data` pero
-  confiá en los permisos de grupo.
-- Hay un ejemplo listo en
-  [`docs/ejemplos/php-fpm/juan.conf`](ejemplos/php-fpm/juan.conf).
+Para aislar **clientes distintos**, Nube no te alcanza: usá un VPS por
+cliente.
 
 ## 8. MySQL / MariaDB
 
@@ -390,40 +377,38 @@ Reglas:
 - No pongas secretos en la línea de comandos: quedan en `history` y en
   `ps`. Usá `mysql` por stdin o variables de entorno.
 - Rotalas si se filtraron (ver
-  [04 · Usuarios y apps](04-usuarios-y-aplicaciones.md#10-cambiar-credenciales-de-base)).
+  [04 · El usuario y las apps](04-usuario-y-apps.md#9-cambiar-credenciales-de-base)).
 - Revisá `~/.bash_history`, `/root/.bash_history` y los logs de auditoría
   como parte de una revisión.
 
-## 10. git-shell y usuarios
+## 10. git-shell y sudoers
 
-Los usuarios de deploy:
+El usuario de deploy:
 
-- tienen `git-shell` como shell: no pueden ejecutar comandos arbitrarios;
-- ven el mensaje de `no-interactive-login` si intentan entrar;
-- no deben pertenecer a `sudo`.
+- tiene `git-shell` como shell: no puede ejecutar comandos arbitrarios;
+- ve el mensaje de `no-interactive-login` si intenta entrar;
+- tiene tres permisos acotados en `/etc/sudoers.d/nube`, que necesita el push
+  de configuración y `nd`:
+
+```sudoers
+nube ALL=(root) NOPASSWD: /usr/local/bin/nube-apply-config, /usr/bin/systemctl reload nginx, /usr/sbin/nginx -t
+```
 
 Verificaciones:
 
 ```bash
-getent passwd juan        # /usr/bin/git-shell
-sudo -l -U juan           # no debería tener sudo
-sudo grep -r nopasswd /etc/sudoers /etc/sudoers.d/
+getent passwd nube        # /usr/bin/git-shell
+sudo -l -U nube           # solo los comandos de /etc/sudoers.d/nube
+sudo cat /etc/sudoers.d/nube
 ```
 
-Si un usuario necesita correr tareas (cron, workers), hacelo con un servicio
-systemd con `User=juan` o con `cron` propio, no dándole shell.
+Tené en cuenta que quien puede hacer push al repositorio del servidor ejecuta
+`install.sh` como root: es el objetivo del proyecto. Protegé la clave y no la
+compartas. Si querés más control, quitá ese permiso del sudoers y aplicá la
+configuración a mano con `sudo ./install.sh` desde `/opt/nube`.
 
-### sudoers acotado (opcional)
-
-Si querés que un hook propio pueda recargar nginx sin dar sudo completo:
-
-```bash
-sudo visudo -f /etc/sudoers.d/nube-reload
-```
-
-```sudoers
-juan ALL=(root) NOPASSWD: /bin/systemctl reload nginx
-```
+Si la app necesita correr tareas (cron, workers), hacelo con un servicio
+systemd con `User=nube` o con cron propio, no dándole shell.
 
 ## 11. Seguridad de la aplicación
 
@@ -495,7 +480,7 @@ ejemplo están en
 ## Checklist final
 
 - [ ] `PasswordAuthentication no` y `PermitRootLogin no`.
-- [ ] `AllowGroups sudo nube` y usuarios de deploy sin sudo.
+- [ ] `AllowGroups sudo nube` y sudo acotado para el usuario de deploy.
 - [ ] fail2ban activo con `sshd`, `recidive`, `nginx-nube-scan`.
 - [ ] UFW activo con 22/80/443.
 - [ ] `unattended-upgrades` instalado.
@@ -503,6 +488,6 @@ ejemplo están en
 - [ ] Headers, rate limit y TLS probados con SSL Labs (A o mejor).
 - [ ] `.env` y `secrets.gpg` con permisos correctos.
 - [ ] Backups automáticos + una restauración de prueba.
-- [ ] Pool de PHP-FPM por usuario si hay terceros.
+- [ ] Clave de push del servidor protegida.
 
 Siguiente: [07 · Operación y backups](07-operacion-y-backups.md).

@@ -10,11 +10,13 @@ Cómo se relacionan las piezas de Nube. Para el detalle de instalación, ver
 | `sshd` | Autenticación SSH por clave |
 | `git-shell` | Shell restringido: solo comandos git |
 | `git-receive-pack` | Recibe el push y actualiza el repo bare |
-| `hooks/post-update` | Dispara el deploy |
+| `hooks/post-receive` | Dispara la aplicación de la configuración del servidor |
+| `nube-apply-config` | Checkout de la config e instalación (`install.sh`) |
+| `hooks/post-update` | Dispara el deploy de una app |
 | `nube-hook-post-update` | Hace el checkout, `.env`, Composer y Laravel |
 | `nginx` | TLS, virtual hosts, archivos estáticos y proxy a PHP-FPM |
 | `PHP-FPM` | Ejecuta PHP (por defecto como `www-data`) |
-| `MySQL/MariaDB` | Base por app, usuario por usuario |
+| `MySQL/MariaDB` | Base por app, usuario de MySQL único |
 | `acme.sh` | Emite y renueva certificados |
 | `fail2ban` | Banea IPs abusivas en SSH y nginx |
 | `UFW` | Firewall del host |
@@ -41,6 +43,20 @@ Detalles:
   `/etc/nginx/ssl/<host>/`.
 - El `root` es un symlink gestionado por `nd`/`ns`/`nr`.
 - Nginx aplica headers de seguridad, rate limit y bloqueos de rutas.
+
+## Flujo de un push de configuración
+
+```text
+1. git push server main
+2. sshd autentica la clave del usuario (git-shell)
+3. git-receive-pack actualiza ~/git/nube.git
+4. post-receive llama a sudo nube-apply-config (sudoers acotado)
+5. nube-apply-config hace checkout de main en /srv/nube
+6. install.sh copia los scripts a /usr/local y renderiza nginx/ y fail2ban/
+   con los ##NUBE_*## de /etc/nube/nube.conf
+7. nginx -t: si pasa, recarga; si falla, restaura el backup y falla el push
+8. fail2ban se reinicia si esta activo
+```
 
 ## Flujo de un deploy
 
@@ -76,9 +92,12 @@ en [05](../05-deploy-con-git.md#10-zero-downtime-avanzado).
 
 ```text
 root
+├── /opt/nube (clon de tu fork)
+├── /srv/nube (copia de trabajo de la config)
 ├── /usr/local/bin/{nr,nd,ns,nube-*}
 ├── /usr/local/lib/nube/
 ├── /etc/nube/nube.conf
+├── /etc/sudoers.d/nube
 ├── /var/www -> symlinks (2775 root:www-data)
 ├── /var/www/acme (2775 www-data:www-data)
 ├── /etc/nginx/ssl (2770 root:www-data)
@@ -86,6 +105,7 @@ root
     ├── .ssh (0700 usuario:usuario)
     ├── .acme.sh/ (si usa dominios propios)
     ├── secrets.gpg (0600)
+    ├── git/nube.git
     ├── git/<app>.git
     ├── www/<dominio>/public
     └── nube-deploy.log
@@ -95,18 +115,19 @@ root
 | --- | --- |
 | `root` | Todo |
 | `www-data` | Leer los sitios, escribir `storage/` y `bootstrap/cache` |
-| Usuario de deploy | Leer/escribir su home, hacer push a sus repos |
-| Usuarios del grupo `nube` | Entrar por SSH, ejecutar solo comandos git |
-| MySQL app A | Solo la base de app A |
+| Usuario de deploy | Leer/escribir su home, hacer push a sus repositorios |
+| Usuario de deploy (sudo acotado) | `nube-apply-config` y recargar nginx |
+| Usuario de MySQL | Todas las bases de sus apps |
 
 ### Límites del aislamiento
 
+- Hay **un solo usuario de deploy**: los sitios son todos tuyos.
 - Todos los sitios corren, por defecto, como `www-data`.
-- Los usuarios comparten el grupo `www-data` y el grupo `nube`.
-- `.env` y `secrets.gpg` son privados, pero un proceso PHP comprometido de
-  otro sitio del mismo grupo podría leer archivos legibles por grupo.
+- Quien puede hacer push al repositorio del servidor puede instalar
+  configuración como root: es el objetivo del proyecto. Protegé esa clave.
+- Para alojar clientes que no confían entre sí, usá un VPS por cliente.
 
-Para separar de verdad: [pool de PHP-FPM por usuario](../06-seguridad.md#7-php-fpm-por-usuario).
+Ver [06 · Seguridad](../06-seguridad.md).
 
 ## Recursos y escalado
 
@@ -120,10 +141,15 @@ Nube está pensado para **un servidor**. Cuando no alcanza:
 
 ## Decisiones de diseño
 
+- **El repositorio es la configuración del servidor**: `nginx/` y `fail2ban/`
+  se versionan y se aplican con `git push`, en lugar de editar `/etc` a mano.
+  El push valida con `nginx -t` y revierte si algo falla.
 - **Un repositorio bare por app** en lugar de un solo repo con carpetas: el
-  push dispara un deploy independiente y los permisos son por usuario.
+  push dispara un deploy independiente.
 - **Symlinks en `/var/www`** en lugar de carpetas reales: los archivos viven
   en el home del usuario y nginx tiene una ruta estable.
+- **Un solo usuario de deploy**: menos piezas y menos permisos que administrar.
+  Un VPS por cliente si hace falta aislar.
 - **GPG sin passphrase**: permite deploy no interactivo; protege contra
   lectura casual, no contra root.
 - **Sin panel web**: menos superficie y menos piezas; todo es scripteable.
