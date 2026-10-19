@@ -145,14 +145,14 @@ Ver la lista completa en
 
 ### Dominios propios (sin wildcard)
 
-Para un dominio suelto (`app.example.com`), `nd` emite el certificado por
-HTTP-01 usando acme.sh del usuario de deploy:
+Para un dominio suelto (`app.example.com`), `nube-add-domain` emite el
+certificado por HTTP-01 usando acme.sh del usuario de deploy:
 
 ```bash
 sudo runuser -u nube -- env HOME=/home/nube sh -c \
   'curl https://get.acme.sh | sh -s email=nube@example.com'
 
-sudo runuser -u nube -- nd app.example.com
+sudo runuser -u nube -- nube-add-domain app.example.com
 ```
 
 El certificado queda instalado en `/etc/nginx/ssl/app.example.com/`

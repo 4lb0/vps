@@ -44,7 +44,7 @@ NUBE_PHP_VERSION="8.3"
 #   stateless -> modo stateless historico de acme.sh
 #   none      -> no emitir certificados (los gestiona otra herramienta)
 #
-# $HOME se expande al home del usuario que ejecuta nd (el usuario de deploy).
+# $HOME se expande al home del usuario que ejecuta nube-add-domain (el usuario de deploy).
 # Si preferis emitir los certificados como root, apunta a /root/.acme.sh.
 NUBE_ACME_HOME="$HOME/.acme.sh"
 NUBE_ACME_MODE="webroot"

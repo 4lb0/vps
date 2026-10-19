@@ -121,7 +121,7 @@ cat > "$TMP_SUDOERS" <<EOF
 # Generado por bootstrap.sh de Nube. No editar a mano.
 # El usuario de deploy puede aplicar la configuracion del servidor con un
 # push a su repositorio ($NUBE_SERVER_REPO) y recargar nginx al emitir
-# certificados con "nd".
+# certificados con "nube-add-domain".
 $NUBE_USER ALL=(root) NOPASSWD: $NUBE_APPLY_BIN, /usr/bin/systemctl reload nginx, /usr/sbin/nginx -t
 EOF
 if visudo -c -q -f "$TMP_SUDOERS" 2>/dev/null; then

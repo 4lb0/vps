@@ -3,13 +3,13 @@
 # Crea (o actualiza) el repositorio bare y el hook de deploy de una app.
 #
 # Uso:
-#   nr <app> [dominio]
+#   nube-add-repository <app> [dominio]
 #
 # Si no se indica dominio, se usa el nombre de la app.
 # Imprime por stdout el SQL de MySQL; los mensajes van a stderr para que
 # se pueda encadenar:
 #
-#   nr mi-app mi-app.example.com | sudo mysql
+#   nube-add-repository mi-app mi-app.example.com | sudo mysql
 #
 # Este comando se ejecuta como el usuario de deploy: el dueno de los
 # repositorios y de los sitios. No se ejecuta como root.
@@ -58,8 +58,8 @@ fi
 nube_info "escribiendo hook post-update"
 cat > "$HOOK_FILE" <<EOF
 #!/bin/bash
-# Generado por nr el $(date -u +%Y-%m-%dT%H:%M:%SZ)
-# No editar a mano: volve a ejecutar nr para regenerarlo.
+# Generado por nube-add-repository el $(date -u +%Y-%m-%dT%H:%M:%SZ)
+# No editar a mano: volve a ejecutar nube-add-repository para regenerarlo.
 exec "$NUBE_HOOK_BIN" "\$1" "$DOMAIN" "$REPO_DIR"
 EOF
 chmod 0755 "$HOOK_FILE"

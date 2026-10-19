@@ -50,7 +50,7 @@ sudo ./bootstrap.sh \
 | --- | --- |
 | Crea/ajusta la configuración | `/etc/nube/nube.conf` |
 | Copia los scripts | `/usr/local/lib/nube/` |
-| Crea los comandos | `/usr/local/bin/{nr,nd,ns,nube-init-user,nube-apply-config,nube-hook-post-update,nube-motd}` |
+| Crea los comandos en `/usr/local/bin` | `nube-init-user`, `nube-add-repository`, `nube-add-domain`, `nube-add-subdomain`, `nube-apply-config`, `nube-hook-post-update`, `nube-motd` |
 | Aplica la configuración de nginx | `/etc/nginx/{nginx.conf,conf.d/nube.conf,snippets/nube-*.conf}` |
 | Aplica la configuración de fail2ban | `/etc/fail2ban/` |
 | Crea el usuario de deploy | `/home/<usuario>` con `git-shell`, MySQL y `secrets.gpg` |
@@ -64,13 +64,13 @@ nube ALL=(root) NOPASSWD: /usr/local/bin/nube-apply-config, /usr/bin/systemctl r
 ```
 
 Son justo los comandos que necesitan el hook del repositorio del servidor y
-`nd` para recargar nginx al emitir certificados. No da shell ni sudo general:
-el usuario sigue con `git-shell`.
+`nube-add-domain` para recargar nginx al emitir certificados. No da shell ni
+sudo general: el usuario sigue con `git-shell`.
 
 Comprobá:
 
 ```bash
-command -v nr nd ns nube-init-user nube-apply-config
+command -v nube-add-repository nube-add-domain nube-add-subdomain nube-init-user nube-apply-config
 sudo -l -U nube
 ```
 
@@ -92,7 +92,7 @@ sudo nano /etc/nube/nube.conf
 | `NUBE_WEB_GROUP` | `www-data` | Grupo con acceso a los sitios y a `storage/` |
 | `NUBE_SSH_GROUP` | `nube` | Grupo con acceso SSH (para `AllowGroups`) |
 | `NUBE_PHP_VERSION` | `8.3` | Versión de PHP (socket de nginx) |
-| `NUBE_ACME_HOME` | `$HOME/.acme.sh` | acme.sh del usuario que ejecuta `nd` |
+| `NUBE_ACME_HOME` | `$HOME/.acme.sh` | acme.sh del usuario que ejecuta `nube-add-domain` |
 | `NUBE_ACME_MODE` | `webroot` | `webroot`, `stateless` o `none` |
 | `NUBE_ACME_WEBROOT` | `/var/www/acme` | Webroot del challenge HTTP-01 |
 | `NUBE_NGINX_SSL_DIR` | `/etc/nginx/ssl` | Dónde van los certificados |
@@ -236,7 +236,7 @@ comparala con `nube.conf.example`.
 
 - [ ] Fork hecho y clonado en `/opt/nube`.
 - [ ] `sudo ./bootstrap.sh` sin errores.
-- [ ] `nr`, `nd`, `ns` disponibles en el PATH.
+- [ ] `nube-add-repository`, `nube-add-domain`, `nube-add-subdomain` disponibles en el PATH.
 - [ ] `/etc/nube/nube.conf` con tu dominio base, usuario y PHP.
 - [ ] nginx aplicado y `nginx -t` en verde.
 - [ ] `git remote add server ...` configurado y `git push server main` probado.

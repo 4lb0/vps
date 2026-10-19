@@ -61,9 +61,9 @@ install -m 0644 "$NUBE_SRC/lib/nube.sh" "$NUBE_LIBDIR/lib/nube.sh"
 
 echo "==> Creando comandos en $NUBE_BINDIR"
 ln -sfn "$NUBE_LIBDIR/init-user.sh"           "$NUBE_BINDIR/nube-init-user"
-ln -sfn "$NUBE_LIBDIR/add-repository.sh"      "$NUBE_BINDIR/nr"
-ln -sfn "$NUBE_LIBDIR/add-domain.sh"          "$NUBE_BINDIR/nd"
-ln -sfn "$NUBE_LIBDIR/add-subdomain.sh"       "$NUBE_BINDIR/ns"
+ln -sfn "$NUBE_LIBDIR/add-repository.sh"      "$NUBE_BINDIR/nube-add-repository"
+ln -sfn "$NUBE_LIBDIR/add-domain.sh"          "$NUBE_BINDIR/nube-add-domain"
+ln -sfn "$NUBE_LIBDIR/add-subdomain.sh"       "$NUBE_BINDIR/nube-add-subdomain"
 ln -sfn "$NUBE_LIBDIR/hook-post-update.sh"    "$NUBE_BINDIR/nube-hook-post-update"
 ln -sfn "$NUBE_LIBDIR/apply-config.sh"        "$NUBE_BINDIR/nube-apply-config"
 ln -sfn "$NUBE_LIBDIR/no-interactive-login.sh" "$NUBE_BINDIR/nube-no-interactive-login"
@@ -71,6 +71,9 @@ ln -sfn "$NUBE_LIBDIR/motd-banner.sh"         "$NUBE_BINDIR/nube-motd"
 
 # Limpieza de comandos de la version multi-usuario.
 rm -f "$NUBE_BINDIR/nube-add-user" "$NUBE_BINDIR/add-user.sh"
+
+# Limpieza de los alias cortos de versiones anteriores.
+rm -f "$NUBE_BINDIR/nr" "$NUBE_BINDIR/nd" "$NUBE_BINDIR/ns"
 
 echo "==> Configuracion"
 install -d -m 0755 "$(dirname "$NUBE_CONFIG")"
@@ -108,10 +111,10 @@ nube_apply_fail2ban_config "$NUBE_SRC"
 
 echo
 echo "Listo. Comandos disponibles:"
-echo "  nube-init-user [clave-publica]   crea el usuario de deploy"
-echo "  nr <app> [dominio]               repositorio bare + hook de la app"
-echo "  nd <dominio>                     dominio propio + certificado TLS"
-echo "  ns <subdominio>                  subdominio bajo $NUBE_BASE_DOMAIN"
-echo "  nube-apply-config                vuelve a aplicar esta configuracion"
+echo "  nube-init-user [clave-publica]      crea el usuario de deploy"
+echo "  nube-add-repository <app> [dominio] repositorio bare + hook de la app"
+echo "  nube-add-domain <dominio>           dominio propio + certificado TLS"
+echo "  nube-add-subdomain <subdominio>     subdominio bajo $NUBE_BASE_DOMAIN"
+echo "  nube-apply-config                   vuelve a aplicar esta configuracion"
 echo
 echo "Siguiente paso: docs/03-instalar-nube.md"

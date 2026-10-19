@@ -88,7 +88,7 @@ El servidor tiene:
 | Config del servidor por `git push` | `bootstrap.sh` + `nube-apply-config` + `nginx/`, `fail2ban/` |
 | Deploy por `git push` | Hook `post-update` + `nube-hook-post-update` |
 | Usuario aislado | `git-shell`, home restringido, claves SSH |
-| Dominios y subdominios | `nd`, `ns` y `nr` |
+| Dominios y subdominios | `nube-add-domain`, `nube-add-subdomain` y `nube-add-repository` |
 | HTTPS | `acme.sh` (HTTP-01 o DNS-01 para wildcard) |
 | PHP / Laravel | `composer install`, `.env`, caches, migraciones |
 | Node.js | `npm ci`, `npm run build` y recarga de PM2 si hay `ecosystem.config.js` |
@@ -117,8 +117,8 @@ git remote add server nube@nube.example.com:git/nube
 git push server main          # aplica nginx, fail2ban y los comandos
 
 # 3. Crear una app y su base de datos
-sudo runuser -u nube -- ns app
-sudo runuser -u nube -- nr app app.nube.example.com | sudo mysql
+sudo runuser -u nube -- nube-add-subdomain app
+sudo runuser -u nube -- nube-add-repository app app.nube.example.com | sudo mysql
 
 # 4. Publicarla
 git remote add prod nube@nube.example.com:git/app
@@ -130,9 +130,9 @@ algo falla, el hook devuelve error y deja el detalle en `~/nube-deploy.log`.
 Si falla la configuración de nginx, el push del servidor la revierte y muestra
 el error de `nginx -t`.
 
-Para un **dominio propio** en lugar de un subdominio, usá `nd app.example.com`
-en el paso 3 (requiere acme.sh instalado para el usuario; ver
-[02 · Dominio y DNS](docs/02-dominio-y-dns.md)).
+Para un **dominio propio** en lugar de un subdominio, usá
+`nube-add-domain app.example.com` en el paso 3 (requiere acme.sh instalado
+para el usuario; ver [02 · Dominio y DNS](docs/02-dominio-y-dns.md)).
 
 ## Cómo usar tu fork
 
@@ -156,10 +156,10 @@ remoto `upstream` y hacé `git merge upstream/main`.
 | `sudo ./install.sh [origen]` | root | Aplica scripts + `nginx/` + `fail2ban/` |
 | `sudo nube-apply-config` | root | Vuelve a aplicar la config del repositorio del servidor |
 | `sudo nube-init-user [clave]` | root | Crea el usuario de deploy, su MySQL y `secrets.gpg` |
-| `sudo runuser -u nube -- nd <dominio>` | root | Prepara un dominio propio y emite TLS |
-| `sudo runuser -u nube -- ns <subdominio>` | root | Prepara `<subdominio>.<base>` |
-| `sudo runuser -u nube -- nr <app> [dominio]` | root | Crea el repo bare y el hook; imprime SQL |
-| `nr`, `nd`, `ns` | usuario de deploy | Igual que arriba, si ya estás como ese usuario |
+| `sudo runuser -u nube -- nube-add-domain <dominio>` | root | Prepara un dominio propio y emite TLS |
+| `sudo runuser -u nube -- nube-add-subdomain <subdominio>` | root | Prepara `<subdominio>.<base>` |
+| `sudo runuser -u nube -- nube-add-repository <app> [dominio]` | root | Crea el repo bare y el hook; imprime SQL |
+| `nube-add-repository`, `nube-add-domain`, `nube-add-subdomain` | usuario de deploy | Igual que arriba, si ya estás como ese usuario |
 | `nube-hook-post-update` | git | Hook interno de deploy de una app |
 | `nube-motd` | login | Banner del servidor |
 | `create-project.sh <app> <template> <origen> [prod]` | tu máquina | Crea un proyecto y configura `origin` y `prod` |

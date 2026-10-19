@@ -33,8 +33,8 @@ Prueba funcional en un VPS o VM descartable:
 ```bash
 sudo ./bootstrap.sh --base-domain nube.example.com \
     --email test@example.com --ssh-key "$(cat ~/.ssh/id_ed25519.pub)"
-sudo runuser -u nube -- ns demo
-sudo runuser -u nube -- nr demo demo.nube.example.com | sudo mysql
+sudo runuser -u nube -- nube-add-subdomain demo
+sudo runuser -u nube -- nube-add-repository demo demo.nube.example.com | sudo mysql
 # push de prueba de la app
 git remote add server nube@nube.example.com:git/nube && git push server main
 ```

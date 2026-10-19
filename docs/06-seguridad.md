@@ -388,7 +388,7 @@ El usuario de deploy:
 - tiene `git-shell` como shell: no puede ejecutar comandos arbitrarios;
 - ve el mensaje de `no-interactive-login` si intenta entrar;
 - tiene tres permisos acotados en `/etc/sudoers.d/nube`, que necesita el push
-  de configuración y `nd`:
+  de configuración y `nube-add-domain`:
 
 ```sudoers
 nube ALL=(root) NOPASSWD: /usr/local/bin/nube-apply-config, /usr/bin/systemctl reload nginx, /usr/sbin/nginx -t

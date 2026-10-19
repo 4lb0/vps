@@ -278,7 +278,7 @@ sudo chmod 2775 /var/www
 # Webroot compartido para el challenge HTTP-01 de acme.sh
 sudo install -d -o www-data -g www-data -m 2775 /var/www/acme
 
-# Destino de los certificados emitidos por nd
+# Destino de los certificados emitidos por nube-add-domain
 sudo install -d -o root -g www-data -m 2770 /etc/nginx/ssl
 
 ls -ld /var/www /var/www/acme /etc/nginx/ssl

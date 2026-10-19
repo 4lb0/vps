@@ -179,8 +179,8 @@ Usuario $NUBE_USER creado.
   DB user:     $DB_USER (password en secrets.gpg)
 
 Siguiente paso:
-  sudo runuser -u $NUBE_USER -- nd <dominio>
-  sudo runuser -u $NUBE_USER -- nr <app> <dominio> | sudo mysql
+  sudo runuser -u $NUBE_USER -- nube-add-domain <dominio>
+  sudo runuser -u $NUBE_USER -- nube-add-repository <app> <dominio> | sudo mysql
 
 Ver docs/04-usuario-y-apps.md
 EOF

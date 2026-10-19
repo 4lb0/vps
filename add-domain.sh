@@ -7,7 +7,7 @@
 #   - emite el certificado TLS con acme.sh (segun NUBE_ACME_MODE)
 #
 # Uso:
-#   nd <dominio>
+#   nube-add-domain <dominio>
 #
 # Ejecutar como el usuario dueno de la app.
 

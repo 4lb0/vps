@@ -2,6 +2,9 @@
 
 Referencia de la interfaz de Nube.
 
+Los comandos se instalan en `/usr/local/bin` y se invocan siempre por su
+nombre completo: no hay alias cortos.
+
 ## Comandos
 
 ### `bootstrap.sh [opciones]`
@@ -37,38 +40,38 @@ sudo nube-apply-config
 
 ### `nube-init-user [<clave-publica> | --key-file <archivo.pub>]`
 
-Alias interno: `init-user.sh`. Requiere **root**.
+Script: `init-user.sh`. Requiere **root**.
 
 Crea el usuario `$NUBE_USER` con `git-shell`, su usuario de MySQL,
 `secrets.gpg` y la clave SSH. Si el usuario ya existe, solo agrega la clave.
 Detalle en
 [04 · El usuario y las apps](../04-usuario-y-apps.md#2-el-usuario-de-deploy).
 
-### `nr <app> [<dominio>]`
+### `nube-add-repository <app> [<dominio>]`
 
-Alias interno: `add-repository.sh`. Se ejecuta **como el usuario de deploy**.
+Script: `add-repository.sh`. Se ejecuta **como el usuario de deploy**.
 
 Crea/actualiza `~/git/<app>.git` y su hook, asegura el directorio web e
 imprime el SQL de MySQL por stdout.
 
 ```bash
-sudo runuser -u nube -- nr blog blog.example.com | sudo mysql
+sudo runuser -u nube -- nube-add-repository blog blog.example.com | sudo mysql
 ```
 
 Errores posibles: nombre o dominio inválido, permisos en `/var/www`, falta de
 `secrets.gpg`.
 
-### `nd <dominio>`
+### `nube-add-domain <dominio>`
 
-Alias interno: `add-domain.sh`. Como el usuario de deploy.
+Script: `add-domain.sh`. Como el usuario de deploy.
 
 Crea el sitio, la página inicial y emite/instala el certificado según
 `NUBE_ACME_MODE`. Ver
 [04](../04-usuario-y-apps.md#4-crear-una-app-en-un-dominio-propio).
 
-### `ns <subdominio>`
+### `nube-add-subdomain <subdominio>`
 
-Alias interno: `add-subdomain.sh`. Como el usuario de deploy.
+Script: `add-subdomain.sh`. Como el usuario de deploy.
 
 Crea `<subdominio>.<NUBE_BASE_DOMAIN>`. No emite certificado (lo cubre el
 wildcard).
@@ -106,7 +109,7 @@ Prueba de humo del deploy desde tu máquina.
 | `NUBE_WEB_GROUP` | `www-data` | Grupo con acceso a los sitios |
 | `NUBE_SSH_GROUP` | `nube` | Grupo con acceso SSH |
 | `NUBE_PHP_VERSION` | `8.3` | Versión de PHP (socket de nginx) |
-| `NUBE_ACME_HOME` | `$HOME/.acme.sh` | acme.sh del usuario que corre `nd` |
+| `NUBE_ACME_HOME` | `$HOME/.acme.sh` | acme.sh del usuario que corre `nube-add-domain` |
 | `NUBE_ACME_MODE` | `webroot` | `webroot`, `stateless` o `none` |
 | `NUBE_ACME_WEBROOT` | `/var/www/acme` | Webroot del challenge HTTP-01 |
 | `NUBE_NGINX_SSL_DIR` | `/etc/nginx/ssl` | Destino de los certificados |
@@ -124,8 +127,9 @@ Prueba de humo del deploy desde tu máquina.
 | `NUBE_NO_INTERACTIVE_LOGIN` | `/usr/local/lib/nube/no-interactive-login.sh` | Mensaje de git-shell |
 | `NUBE_GIT_SHELL` | `/usr/bin/git-shell` | Shell del usuario de deploy |
 
-También se pueden pasar por entorno (`NUBE_BASE_DOMAIN=... nr ...`), pero en
-general conviene el archivo de configuración.
+También se pueden pasar por entorno
+(`NUBE_BASE_DOMAIN=... nube-add-repository ...`), pero en general conviene el
+archivo de configuración.
 
 `NUBE_CONFIG=/ruta/alternativa` permite usar otro archivo.
 
@@ -138,7 +142,7 @@ general conviene el archivo de configuración.
 | `/opt/nube/` | Repositorio clonado (tu fork) |
 | `/srv/nube/` | Copia de trabajo desde la que se aplica la config |
 | `/usr/local/lib/nube/` | Scripts y `lib/nube.sh` |
-| `/usr/local/bin/nr`, `nd`, `ns`, `nube-*` | Symlinks a los scripts |
+| `/usr/local/bin/` | Comandos instalados como symlinks a los scripts: `nube-add-repository`, `nube-add-domain`, `nube-add-subdomain` y `nube-*` |
 | `/etc/nube/nube.conf` | Configuración |
 | `/etc/sudoers.d/nube` | Permisos acotados del usuario de deploy |
 | `/var/www/<dominio>` | Symlink al sitio |

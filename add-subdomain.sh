@@ -8,7 +8,7 @@
 # No emite certificado: el comodin *.NUBE_BASE_DOMAIN debe cubrirlo.
 #
 # Uso:
-#   ns <subdominio>
+#   nube-add-subdomain <subdominio>
 
 set -euo pipefail
 
@@ -45,4 +45,4 @@ EOF
 fi
 
 nube_info "listo: $(nube_url "$DOMAIN")"
-nube_info "siguiente: nr <app> $DOMAIN | sudo mysql"
+nube_info "siguiente: nube-add-repository <app> $DOMAIN | sudo mysql"

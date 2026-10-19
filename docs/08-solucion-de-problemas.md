@@ -57,7 +57,7 @@ sudo ls /home/nube/git/
 Creá el repo con:
 
 ```bash
-sudo runuser -u nube -- nr <app> <dominio> | sudo mysql
+sudo runuser -u nube -- nube-add-repository <app> <dominio> | sudo mysql
 ```
 
 ### El push queda colgado después de `remote:`
@@ -72,7 +72,7 @@ Cada mensaje de error indica el problema. Los más comunes:
 
 | Mensaje | Causa |
 | --- | --- |
-| `no existe el directorio web /var/www/...` | El symlink no existe: corré `nd`/`ns` o `nr` |
+| `no existe el directorio web /var/www/...` | El symlink no existe: corré `nube-add-domain`/`nube-add-subdomain` o `nube-add-repository` |
 | `no se pudo crear /var/www/...` | `/var/www` sin permiso de grupo: ver [01](01-preparar-ubuntu.md#12-directorios-y-permisos) |
 | `composer: command not found` | Composer no instalado globalmente |
 | `hay package.json pero npm no esta instalado` | Falta Node.js en el servidor (ver [01](01-preparar-ubuntu.md#10-nodejs-y-python-opcional)) |
@@ -195,7 +195,7 @@ El certificado no cubre ese nombre:
 
 - El wildcard cubre **un** nivel (`*.nube.example.com` no cubre
   `a.b.nube.example.com`).
-- El dominio propio no tiene certificado emitido: corré `nd` de nuevo.
+- El dominio propio no tiene certificado emitido: corré `nube-add-domain` de nuevo.
 - El `server_name` de nginx no coincide con el dominio.
 
 ```bash

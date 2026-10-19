@@ -41,7 +41,7 @@ Detalles:
 - El server wildcard usa un certificado `*.nube.example.com`.
 - Los dominios propios se resuelven por SNI: nginx busca el certificado en
   `/etc/nginx/ssl/<host>/`.
-- El `root` es un symlink gestionado por `nd`/`ns`/`nr`.
+- El `root` es un symlink gestionado por `nube-add-domain`/`nube-add-subdomain`/`nube-add-repository`.
 - Nginx aplica headers de seguridad, rate limit y bloqueos de rutas.
 
 ## Flujo de un push de configuración
@@ -97,7 +97,7 @@ en [05](../05-deploy-con-git.md#10-zero-downtime-avanzado).
 root
 ├── /opt/nube (clon de tu fork)
 ├── /srv/nube (copia de trabajo de la config)
-├── /usr/local/bin/{nr,nd,ns,nube-*}
+├── /usr/local/bin/{nube-add-repository,nube-add-domain,nube-add-subdomain,nube-*}
 ├── /usr/local/lib/nube/
 ├── /etc/nube/nube.conf
 ├── /etc/sudoers.d/nube

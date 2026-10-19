@@ -83,19 +83,20 @@ Ideal para prototipos: no hace falta tocar DNS ni emitir certificados (el
 wildcard y `conf.d/nube.conf` ya cubren `*.nube.example.com`).
 
 ```bash
-sudo runuser -u nube -- ns blog
+sudo runuser -u nube -- nube-add-subdomain blog
 ```
 
 Crea `/home/nube/www/blog.nube.example.com/public` y lo deja listo para
 recibir el push.
 
-Si estás logueado directamente como el usuario, alcanza con `ns blog` (el
-usuario tiene `git-shell`, así que en la práctica se corre con `runuser`).
+Si estás logueado directamente como el usuario, alcanza con
+`nube-add-subdomain blog` (el usuario tiene `git-shell`, así que en la práctica
+se corre con `runuser`).
 
 ## 4. Crear una app en un dominio propio
 
 ```bash
-sudo runuser -u nube -- nd blog.example.com
+sudo runuser -u nube -- nube-add-domain blog.example.com
 ```
 
 Además de crear el directorio, emite el certificado con acme.sh
@@ -106,15 +107,15 @@ Además de crear el directorio, emite el certificado con acme.sh
 - que el challenge HTTP-01 llegue a nginx (`/var/www/acme`).
 
 Si el certificado no se emite, el sitio queda creado igual; corregí el DNS y
-volvé a ejecutar `nd`.
+volvé a ejecutar `nube-add-domain`.
 
 ## 5. Crear el repositorio y la base
 
 ```bash
-sudo runuser -u nube -- nr blog blog.example.com | sudo mysql
+sudo runuser -u nube -- nube-add-repository blog blog.example.com | sudo mysql
 ```
 
-`nr`:
+`nube-add-repository`:
 
 1. crea `~/git/blog.git` (bare) si no existe;
 2. escribe `hooks/post-update` apuntando a `nube-hook-post-update`;
@@ -137,23 +138,26 @@ socket) y que MySQL esté corriendo.
 Para ver el SQL sin ejecutarlo:
 
 ```bash
-sudo runuser -u nube -- nr blog blog.example.com
+sudo runuser -u nube -- nube-add-repository blog blog.example.com
 ```
 
 ## 6. Varias apps
 
-No hay límite: repetí `ns`/`nd` y `nr` con otro nombre. Todas las apps
-comparten `secrets.gpg`, que contiene **un** usuario de MySQL. Cada app tiene
-su propia base y el `GRANT` correspondiente.
+No hay límite: repetí `nube-add-subdomain`/`nube-add-domain` y
+`nube-add-repository` con otro nombre. Todas las apps comparten
+`secrets.gpg`, que contiene **un** usuario de MySQL. Cada app tiene su propia
+base y el `GRANT` correspondiente.
 
 ```bash
-sudo runuser -u nube -- ns tienda
-sudo runuser -u nube -- nr tienda tienda.nube.example.com | sudo mysql
+sudo runuser -u nube -- nube-add-subdomain tienda
+sudo runuser -u nube -- nube-add-repository tienda tienda.nube.example.com | sudo mysql
 ```
 
-Orden recomendado: `ns`/`nd` primero (crea el directorio) y `nr` después
-(crea el repo y la base). `nr` también asegura el directorio, así que si
-omites `ns`/`nd` el sitio se crea, pero no vas a tener el mensaje de TLS.
+Orden recomendado: `nube-add-subdomain`/`nube-add-domain` primero (crea el
+directorio) y `nube-add-repository` después (crea el repo y la base).
+`nube-add-repository` también asegura el directorio, así que si omites
+`nube-add-subdomain`/`nube-add-domain` el sitio se crea, pero no vas a tener el
+mensaje de TLS.
 
 > Ojo: `nube` está reservado para el repositorio del servidor
 > (`~/git/nube.git`). No lo uses como nombre de app.
@@ -212,8 +216,8 @@ Después hacé un push para que el `.env` de cada app se actualice.
 ## Checklist
 
 - [ ] Usuario de deploy creado y con acceso SSH verificado.
-- [ ] `ns` o `nd` ejecutado según el tipo de dominio.
-- [ ] `nr ... | sudo mysql` sin errores.
+- [ ] `nube-add-subdomain` o `nube-add-domain` ejecutado según el tipo de dominio.
+- [ ] `nube-add-repository ... | sudo mysql` sin errores.
 - [ ] `git remote add prod` configurado en tu máquina.
 - [ ] Primer push hecho ([05](05-deploy-con-git.md)).
 

@@ -48,7 +48,7 @@ valida, **la restaura** y el push falla con el error de nginx.
   Lo emite `acme.sh` con DNS-01 (ver
   [02 · Dominio y DNS](../docs/02-dominio-y-dns.md)).
 - **Dominios propios**: `/etc/nginx/ssl/<dominio>/fullchain.pem` y `key.pem`,
-  instalados por `nd`.
+  instalados por `nube-add-domain`.
 - Si todavía no hay certificado wildcard, `install.sh` deja uno autofirmado
   para que nginx pueda arrancar. Reemplazalo cuanto antes.
 
