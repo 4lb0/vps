@@ -1,5 +1,10 @@
 # Nube
 
+[![Demo: subir una app hecha en PHP a Nube desde git](https://asciinema.org/a/449183.svg)](https://asciinema.org/a/449183)
+
+▶️ [Ver la demo en asciinema](https://asciinema.org/a/449183): subir una app
+hecha en PHP a Nube desde `git push`.
+
 **Tu propio mini-PaaS sobre un VPS con Ubuntu.** Hacés `git push` y la app
 queda publicada con HTTPS, base de datos y logs, sin depender de un proveedor
 de PaaS.
@@ -215,6 +220,10 @@ Nube es deliberadamente chico y transparente:
   multi-tenant: si necesitás alojar clientes que no confían entre sí, usá un
   VPS por cliente.
 - No hay panel web, ni autoescalado, ni deploy blue/green.
+
+## Licencia
+
+[MIT](LICENSE) © 2026 Rodrigo Arce.
 
 ## Créditos
 
