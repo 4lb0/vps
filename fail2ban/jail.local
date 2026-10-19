@@ -26,6 +26,8 @@ banaction_allports = iptables-allports
 [sshd]
 enabled  = true
 backend  = systemd
+# Si cambias el puerto SSH, repeti el mismo valor en [sshd] y [sshd-ddos].
+# port   = 2222
 mode     = aggressive
 maxretry = 3
 findtime = 10m
@@ -35,6 +37,7 @@ bantime  = 24h
 [sshd-ddos]
 enabled  = true
 backend  = systemd
+# port   = 2222
 maxretry = 10
 findtime = 5m
 bantime  = 1h

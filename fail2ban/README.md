@@ -19,6 +19,8 @@ sudo systemctl enable --now fail2ban
 Antes de reiniciar, edita `/etc/fail2ban/jail.local`:
 
 - `ignoreip`: agrega tu IP de administracion (o la de tu VPN).
+- Si cambias el puerto SSH, poné el mismo valor en `port` dentro de `[sshd]` y
+  `[sshd-ddos]`; si no, fail2ban banea el puerto equivocado.
 - Si usas Cloudflare, lee la seccion "Cloudflare y la IP real" en la doc de
   seguridad. Sin `real_ip`, fail2ban ve la IP de Cloudflare y puede banearla.
 

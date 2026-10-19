@@ -300,8 +300,8 @@ sudo ufw enable
 sudo ufw status verbose
 ```
 
-La configuración completa, incluido fail2ban, está en
-[06 · Seguridad](06-seguridad.md).
+La configuración completa, incluido fail2ban y el cambio a un puerto SSH no
+estándar con el 22 bloqueado, está en [06 · Seguridad](06-seguridad.md).
 
 ## 14. Verificación
 
@@ -335,6 +335,6 @@ sudo ss -tlnp | grep -E ':(80|443|3306)'
 - [ ] Node.js y/o Python instalados si vas a usarlos.
 - [ ] acme.sh instalado.
 - [ ] `/var/www` con setgid y grupo `www-data`.
-- [ ] UFW permitiendo 22, 80 y 443.
+- [ ] UFW permitiendo 22 (o el puerto SSH que uses), 80 y 443.
 
 Siguiente: [02 · Dominio y DNS](02-dominio-y-dns.md).

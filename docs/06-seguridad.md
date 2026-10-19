@@ -28,7 +28,7 @@ usá un VPS por cliente.
 
 1. [ ] Solo autenticación por clave SSH y root deshabilitado.
 2. [ ] `fail2ban` activo con SSH, nginx y reincidentes.
-3. [ ] UFW permitiendo solo 22, 80 y 443.
+3. [ ] UFW permitiendo solo el puerto SSH elegido (no 22), 80 y 443.
 4. [ ] Actualizaciones automáticas de seguridad.
 5. [ ] MySQL escuchando solo en `127.0.0.1`.
 6. [ ] `/etc/nube/nube.conf` y secretos sin permisos de más.
@@ -101,6 +101,252 @@ Podés restringir una clave en `authorized_keys`:
 from="203.0.113.0/24",no-port-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... nube@casa
 ```
 
+### Puerto SSH no estándar y bloqueo del 22
+
+Cambiar el puerto de SSH **no reemplaza** la autenticación por clave ni
+`fail2ban`: un escaneo que prueba todos los puertos igual encuentra el
+servicio. Sirve para bajar el ruido de los escaneos automáticos que golpean el
+22 todo el día, y con eso los logs y la carga inútil. Tratalo como defensa en
+profundidad, no como un secreto.
+
+Elegí un puerto alto que no use otro servicio (por ejemplo `2222`; los puertos
+efímeros típicos van de `49152` a `65535`) y comprobá que esté libre:
+
+```bash
+sudo ss -tlnp | grep -E ':(22|2222)\b'
+```
+
+Antes de empezar, abrí una segunda sesión SSH y confirmá que tenés acceso a la
+consola del proveedor. Un error en `sshd_config` te puede dejar afuera.
+
+#### 1. Abrir el puerto nuevo en el firewall
+
+Con UFW, que es el firewall que recomienda Nube:
+
+```bash
+sudo ufw allow 2222/tcp
+sudo ufw status numbered
+```
+
+No cierres el 22 todavía.
+
+#### 2. Configurar sshd
+
+Agregá el puerto en `/etc/ssh/sshd_config.d/99-nube.conf`:
+
+```sshconfig
+Port 2222
+```
+
+Si el archivo principal (`/etc/ssh/sshd_config`) o otro drop-in tiene un
+`Port 22` activo, sshd escucha en los dos. Revisá qué puertos quedaron
+configurados:
+
+```bash
+sudo sshd -T | grep '^port'
+```
+
+En Ubuntu 24.04 sshd puede arrancar por activación de socket. Si
+`systemctl is-enabled ssh.socket` responde `enabled`, el puerto de escucha se
+define también en la unidad de socket:
+
+```bash
+sudo systemctl edit ssh.socket
+```
+
+```ini
+[Socket]
+ListenStream=
+ListenStream=2222
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ssh.socket
+```
+
+Si usás `ssh.service` en lugar de `ssh.socket`, alcanza con `Port` en
+`sshd_config`.
+
+Validá y reiniciá:
+
+```bash
+sudo sshd -t
+sudo systemctl restart ssh
+sudo ss -tlnp | grep sshd
+```
+
+La sesión que ya tenías abierta sigue viva: reiniciar sshd no corta las
+conexiones establecidas.
+
+#### 3. Verificar el puerto nuevo desde otra máquina
+
+```bash
+ssh -p 2222 usuario@203.0.113.10
+```
+
+No lo pruebes solo desde el propio servidor. Si funciona, dejá esa sesión
+abierta hasta terminar.
+
+#### 4. Bloquear el 22 con iptables
+
+Recién ahora, con el 2222 verificado, bloqueá las conexiones **nuevas** al 22.
+Las sesiones ya establecidas siguen funcionando hasta que las cierres:
+
+```bash
+sudo iptables -I INPUT 1 -p tcp --dport 22 -m conntrack --ctstate NEW \
+  -m comment --comment "nube: SSH solo en 2222" -j DROP
+sudo ip6tables -I INPUT 1 -p tcp --dport 22 -m conntrack --ctstate NEW \
+  -m comment --comment "nube: SSH solo en 2222" -j DROP
+```
+
+Comprobá el bloqueo en el servidor:
+
+```bash
+sudo iptables -S INPUT | grep 'dport 22'
+```
+
+Y desde otra máquina:
+
+```bash
+nc -vz -w 3 203.0.113.10 22      # debe fallar
+nc -vz -w 3 203.0.113.10 2222    # debe conectar
+```
+
+**Persistencia sin UFW.** Guardá las reglas con `iptables-persistent`:
+
+```bash
+sudo apt install -y iptables-persistent
+sudo netfilter-persistent save
+sudo systemctl enable netfilter-persistent
+```
+
+**Persistencia con UFW.** No mezcles reglas sueltas con
+`iptables-persistent`: UFW reconstruye sus cadenas al recargar. Poné la regla
+en `/etc/ufw/before.rules`, dentro de `*filter` y antes de
+`-A ufw-before-input -j ufw-user-input`:
+
+```text
+# Bloquear conexiones nuevas al 22: SSH escucha en 2222.
+-A ufw-before-input -p tcp --dport 22 -m conntrack --ctstate NEW -j DROP
+```
+
+Recargá y verificá:
+
+```bash
+sudo ufw reload
+sudo ufw status verbose
+```
+
+Como UFW acepta `RELATED,ESTABLISHED` antes de esa línea, las sesiones
+abiertas en el 22 no se cortan; las nuevas se descartan. Si tenías una regla
+para el 22, borrala:
+
+```bash
+sudo ufw delete allow 22/tcp
+sudo ufw delete allow OpenSSH
+```
+
+El `delete` de una regla que no existe devuelve error; ignoralo si es el caso.
+
+#### 5. Quitar el 22 de sshd
+
+Cuando confirmes que el 22 está bloqueado y el 2222 funciona, eliminá
+cualquier `Port 22` que quede en la configuración y reiniciá:
+
+```bash
+sudo sshd -T | grep '^port'     # solo debe aparecer 2222
+sudo systemctl restart ssh
+```
+
+#### 6. Ajustar fail2ban
+
+Las acciones de baneo de fail2ban usan el puerto configurado en el jail. Si no
+lo actualizás, intenta bloquear el 22 y deja el 2222 sin protección. En
+`/etc/fail2ban/jail.local`:
+
+```ini
+[sshd]
+enabled = true
+port    = 2222
+
+[sshd-ddos]
+enabled = true
+port    = 2222
+```
+
+```bash
+sudo systemctl restart fail2ban
+sudo fail2ban-client status sshd    # debe mostrar Ports 2222
+```
+
+#### 7. Actualizar clientes y repositorios git
+
+En tu máquina, agregá el puerto en `~/.ssh/config`:
+
+```sshconfig
+Host nube.example.com
+    HostName 203.0.113.10
+    User root
+    Port 2222
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+Así `ssh nube.example.com` y los remotos con sintaxis `usuario@host:ruta`
+siguen funcionando. Si preferís no tocar el cliente, usá una URL explícita:
+
+```bash
+git remote set-url server ssh://nube@203.0.113.10:2222/home/nube/git/nube.git
+```
+
+Comprobá el deploy:
+
+```bash
+git ls-remote server
+git push server main
+```
+
+#### 8. Rollback
+
+Si algo falla y todavía tenés la sesión vieja o la consola del proveedor:
+
+```bash
+# Volver a permitir el 22 mientras reparás sshd
+sudo iptables -D INPUT -p tcp --dport 22 -m conntrack --ctstate NEW \
+  -m comment --comment "nube: SSH solo en 2222" -j DROP
+sudo ip6tables -D INPUT -p tcp --dport 22 -m conntrack --ctstate NEW \
+  -m comment --comment "nube: SSH solo en 2222" -j DROP
+```
+
+Después restaurá `Port 22` en sshd, reiniciá y, si corresponde, quitá la regla
+de `/etc/ufw/before.rules` con `sudo ufw reload`.
+
+#### Endurecer un poco más
+
+- Si tu IP de administración es fija, permití SSH solo desde ahí y descartá el
+  resto:
+
+  ```bash
+  sudo ufw delete allow 2222/tcp
+  sudo ufw allow from 203.0.113.10 to any port 2222 proto tcp
+  ```
+
+  Con IP dinámica esto te deja afuera; en ese caso usá una VPN.
+- Sumá límites al `sshd_config`:
+
+  ```sshconfig
+  MaxSessions 4
+  MaxStartups 10:30:60
+  StrictModes yes
+  UseDNS no
+  ```
+
+- `fail2ban` ya cubre la fuerza bruta y los reincidentes. Verificá que el jail
+  `sshd` use el puerto nuevo y que `recidive` esté activo.
+- Si querés una mejora real y no solo menos ruido, no expongas SSH a Internet:
+  usá **Tailscale**, **WireGuard** o un túnel de Cloudflare, y dejá el puerto
+  cerrado para todos.
+
 ## 3. fail2ban
 
 ```bash
@@ -119,6 +365,10 @@ Antes de reiniciar, editá `ignoreip` con tu IP de administración:
 ```ini
 ignoreip = 127.0.0.1/8 ::1 203.0.113.10
 ```
+
+Si cambiás el puerto SSH, poné el mismo valor en `port` dentro de `[sshd]` y
+`[sshd-ddos]` (ver "Puerto SSH no estándar y bloqueo del 22"). Sin eso,
+fail2ban intenta banear el puerto equivocado.
 
 Estado y pruebas:
 
@@ -169,7 +419,7 @@ sudo fail2ban-client status nginx-nube-scan
 sudo apt install -y ufw
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw allow OpenSSH
+sudo ufw allow 2222/tcp         # el puerto SSH elegido; 22 si todavía no lo cambiaste
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw logging on
@@ -180,7 +430,9 @@ sudo ufw status verbose
 Notas:
 
 - fail2ban agrega sus propias reglas y convive con UFW.
-- Si cambiás el puerto de SSH, actualizá la regla **antes** de reiniciar sshd.
+- Si cambiás el puerto de SSH, abrí el nuevo **antes** de reiniciar sshd y
+  bloqueá el 22 después de verificar el acceso (ver "Puerto SSH no estándar y
+  bloqueo del 22").
 - No abras MySQL (`3306`) ni Redis: deben escuchar solo en localhost.
 - Con IPv6, UFW también aplica; verificá `sudo ufw status` muestra `(v6)`.
 
@@ -480,9 +732,10 @@ ejemplo están en
 ## Checklist final
 
 - [ ] `PasswordAuthentication no` y `PermitRootLogin no`.
+- [ ] SSH en un puerto no estándar y el 22 bloqueado en el firewall.
 - [ ] `AllowGroups sudo nube` y sudo acotado para el usuario de deploy.
 - [ ] fail2ban activo con `sshd`, `recidive`, `nginx-nube-scan`.
-- [ ] UFW activo con 22/80/443.
+- [ ] UFW activo con solo el puerto SSH elegido, 80 y 443.
 - [ ] `unattended-upgrades` instalado.
 - [ ] MySQL en `127.0.0.1` y `local_infile=0`.
 - [ ] Headers, rate limit y TLS probados con SSL Labs (A o mejor).

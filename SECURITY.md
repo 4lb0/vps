@@ -26,7 +26,8 @@ usuario, nginx, MySQL, fail2ban) y expone SSH y HTTP/HTTPS a Internet.
 
 ## Superficie de ataque
 
-- `sshd` (claves SSH, sin contraseñas).
+- `sshd` (claves SSH, sin contraseñas; se recomienda un puerto no estándar
+  con el 22 bloqueado).
 - `nginx` (HTTP/HTTPS de todos los sitios).
 - `PHP-FPM` y el código de cada aplicación.
 - `MySQL` (solo localhost).
@@ -37,12 +38,14 @@ usuario, nginx, MySQL, fail2ban) y expone SSH y HTTP/HTTPS a Internet.
 
 1. Solo claves SSH; `PermitRootLogin no` y `PasswordAuthentication no`.
 2. `AllowGroups sudo nube` y sudo acotado para el usuario de deploy.
-3. UFW activo con solo 22, 80 y 443.
-4. fail2ban activo (ver [`fail2ban/`](fail2ban/)).
-5. MySQL en `127.0.0.1`, sin `local_infile`.
-6. Actualizaciones automáticas de seguridad.
-7. Backups probados.
-8. Revisar dependencias de las apps.
+3. SSH en un puerto no estándar y el 22 bloqueado en el firewall
+   (recomendado).
+4. UFW activo con solo el puerto SSH elegido, 80 y 443.
+5. fail2ban activo (ver [`fail2ban/`](fail2ban/)).
+6. MySQL en `127.0.0.1`, sin `local_infile`.
+7. Actualizaciones automáticas de seguridad.
+8. Backups probados.
+9. Revisar dependencias de las apps.
 
 El detalle está en [`docs/06-seguridad.md`](docs/06-seguridad.md).
 
