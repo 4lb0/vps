@@ -1,9 +1,10 @@
 # Nube
 
-[![Demo: subir una app hecha en PHP a Nube desde git](https://asciinema.org/a/449183.svg)](https://asciinema.org/a/449183)
+[![Demo: subir una app hecha en PHP a Nube desde git](docs/img/demo.gif)](https://asciinema.org/a/449183)
 
-▶️ [Ver la demo en asciinema](https://asciinema.org/a/449183): subir una app
-hecha en PHP a Nube desde `git push`.
+▶️ Demo: [subir una app hecha en PHP a Nube desde `git push`](https://asciinema.org/a/449183).
+El GIF de arriba es la grabación acelerada; en asciinema podés pausarla,
+copiar los comandos y cambiar la velocidad.
 
 **Tu propio mini-PaaS sobre un VPS con Ubuntu.** Hacés `git push` y la app
 queda publicada con HTTPS, base de datos y logs, sin depender de un proveedor
